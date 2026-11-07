@@ -1,5 +1,3 @@
-import type { Recordable, UserInfo } from '@vben/types';
-
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -10,7 +8,8 @@ import { resetAllStores, useAccessStore, useUserStore } from '@vben/stores';
 import { ElNotification } from 'element-plus';
 import { defineStore } from 'pinia';
 
-import { getAccessCodesApi, getUserInfoApi, loginApi, logoutApi } from '#/api';
+import { getAccessCodesApi, getUserInfoApi, logoutApi } from '#/api';
+import { exchangeCodeForToken, takeRedirectPath } from '#/api/core/oauth';
 import { $t } from '#/locales';
 
 export const useAuthStore = defineStore('auth', () => {
@@ -21,53 +20,44 @@ export const useAuthStore = defineStore('auth', () => {
   const loginLoading = ref(false);
 
   /**
-   * 异步处理登录操作
-   * Asynchronously handle the login process
-   * @param params 登录表单数据
+   * OAuth2 授权码回调：code 换 token，再拉取用户信息与权限码。
+   *
+   * @param code 授权码
+   * @param state 授权服务器原样带回的 state，用于防 CSRF
    */
-  async function authLogin(
-    params: Recordable<any>,
-    onSuccess?: () => Promise<void> | void,
-  ) {
-    // 异步处理用户登录操作并获取 accessToken
-    let userInfo: null | UserInfo = null;
+  async function authByOAuth2Code(code: string, state: string) {
+    let userInfo = null;
     try {
       loginLoading.value = true;
-      const { accessToken } = await loginApi(params);
+      const token = await exchangeCodeForToken(code, state);
 
-      // 如果成功获取到 accessToken
-      if (accessToken) {
-        // 将 accessToken 存储到 accessStore 中
-        accessStore.setAccessToken(accessToken);
+      accessStore.setAccessToken(token.access_token);
+      if (token.refresh_token) {
+        accessStore.setRefreshToken(token.refresh_token);
+      }
 
-        // 获取用户信息并存储到 accessStore 中
-        const [fetchUserInfoResult, accessCodes] = await Promise.all([
-          fetchUserInfo(),
-          getAccessCodesApi(),
-        ]);
+      const [fetchUserInfoResult, accessCodes] = await Promise.all([
+        fetchUserInfo(),
+        getAccessCodesApi(),
+      ]);
 
-        userInfo = fetchUserInfoResult;
+      userInfo = fetchUserInfoResult;
+      userStore.setUserInfo(userInfo);
+      accessStore.setAccessCodes(accessCodes);
+      accessStore.setLoginExpired(false);
 
-        userStore.setUserInfo(userInfo);
-        accessStore.setAccessCodes(accessCodes);
+      const redirectPath =
+        takeRedirectPath() ||
+        userInfo.homePath ||
+        preferences.app.defaultHomePath;
+      await router.replace(redirectPath);
 
-        if (accessStore.loginExpired) {
-          accessStore.setLoginExpired(false);
-        } else {
-          onSuccess
-            ? await onSuccess?.()
-            : await router.push(
-                userInfo.homePath || preferences.app.defaultHomePath,
-              );
-        }
-
-        if (userInfo?.realName) {
-          ElNotification({
-            message: `${$t('authentication.loginSuccessDesc')}:${userInfo?.realName}`,
-            title: $t('authentication.loginSuccess'),
-            type: 'success',
-          });
-        }
+      if (userInfo?.realName) {
+        ElNotification({
+          message: `${$t('authentication.loginSuccessDesc')}:${userInfo?.realName}`,
+          title: $t('authentication.loginSuccess'),
+          type: 'success',
+        });
       }
     } finally {
       loginLoading.value = false;
@@ -117,7 +107,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   return {
     $reset,
-    authLogin,
+    authByOAuth2Code,
     fetchUserInfo,
     loginLoading,
     logout,

@@ -12,6 +12,11 @@ export const overridesPreferences = defineOverridesPreferences({
   // overrides
   app: {
     name: import.meta.env.VITE_APP_TITLE,
+    // mixed：合并内置路由与后端菜单（getAllMenusApi → /menu/all）。
+    // 后端菜单为空时仍可使用内置页面，避免登录后 404
+    accessMode: 'mixed',
+    // OAuth2 access_token 过期时用 refresh_token 续期（/oauth2/token）
+    enableRefreshToken: true,
   },
   copyright: appCopyrightPreferences,
 });
