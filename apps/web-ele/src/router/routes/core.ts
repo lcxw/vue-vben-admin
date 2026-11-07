@@ -22,6 +22,18 @@ const fallbackNotFoundRoute: RouteRecordRaw = {
 
 /** 基本路由，这些路由是必须存在的 */
 const coreRoutes: RouteRecordRaw[] = [
+  /** OAuth2 授权码回调：在权限守卫之前处理 code 换 token */
+  {
+    component: () => import('#/views/_core/authentication/oauth2-callback.vue'),
+    meta: {
+      hideInBreadcrumb: true,
+      hideInMenu: true,
+      hideInTab: true,
+      title: 'OAuth2 登录',
+    },
+    name: 'OAuth2Callback',
+    path: '/oauth2/callback',
+  },
   /**
    * 根路由
    * 使用基础布局，作为所有页面的父级容器，子级就不必配置BasicLayout。

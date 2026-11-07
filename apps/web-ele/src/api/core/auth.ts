@@ -1,55 +1,41 @@
-import { baseRequestClient, requestClient } from '#/api/request';
+import type { OAuth2TokenResponse } from './oauth';
+
+import { useAccessStore } from '@vben/stores';
+
+import { requestClient } from '#/api/request';
+
+import { refreshAccessToken } from './oauth';
 
 export namespace AuthApi {
-  /** 登录接口参数 */
-  export interface LoginParams {
-    password?: string;
-    username?: string;
-  }
-
-  /** 登录接口返回值 */
-  export interface LoginResult {
-    accessToken: string;
-  }
-
-  export interface RefreshTokenResult {
-    data: string;
-    status: number;
-  }
+  export type RefreshTokenResult = OAuth2TokenResponse;
 }
 
 /**
- * 登录
+ * 刷新 accessToken（OAuth2 refresh_token grant）
+ *
+ * 后端端点：POST /oauth2/token
+ * public client + PKCE，不需要 client_secret。
  */
-export async function loginApi(data: AuthApi.LoginParams) {
-  return requestClient.post<AuthApi.LoginResult>('/auth/login', data);
-}
-
-/**
- * 刷新accessToken
- */
-export async function refreshTokenApi() {
-  return baseRequestClient.post<AuthApi.RefreshTokenResult>(
-    '/auth/refresh',
-    undefined,
-    {
-      withCredentials: true,
-    },
-  );
+export async function refreshTokenApi(): Promise<AuthApi.RefreshTokenResult> {
+  const accessStore = useAccessStore();
+  return refreshAccessToken(accessStore.refreshToken ?? '');
 }
 
 /**
  * 退出登录
+ *
+ * OAuth2 授权服务器会话由 IdP 维护，SPA 侧只清理本地令牌。
  */
 export async function logoutApi() {
-  return baseRequestClient.post('/auth/logout', undefined, {
-    withCredentials: true,
-  });
+  // 本地登出由 store/auth.ts 的 resetAllStores 完成
 }
 
 /**
  * 获取用户权限码
+ *
+ * 后端端点：GET /permission/userCodes
+ * 后端需返回：{ code: 200, data: ["perm:code1", "perm:code2"], msg: "ok" }
  */
 export async function getAccessCodesApi() {
-  return requestClient.get<string[]>('/auth/codes');
+  return requestClient.get<string[]>('/permission/userCodes');
 }

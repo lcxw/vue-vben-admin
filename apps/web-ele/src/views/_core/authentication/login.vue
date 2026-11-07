@@ -1,98 +1,43 @@
 <script lang="ts" setup>
-import type { VbenFormSchema } from '@vben/common-ui';
-import type { BasicOption } from '@vben/types';
+import { ref } from 'vue';
+import { useRoute } from 'vue-router';
 
-import { computed, markRaw } from 'vue';
+import { ElButton } from 'element-plus';
 
-import { AuthenticationLogin, SliderCaptcha, z } from '@vben/common-ui';
-import { $t } from '@vben/locales';
-
-import { useAuthStore } from '#/store';
+import { redirectToOAuth2Authorize } from '#/api/core/oauth';
 
 defineOptions({ name: 'Login' });
 
-const authStore = useAuthStore();
+const route = useRoute();
+const loading = ref(false);
 
-const MOCK_USER_OPTIONS: BasicOption[] = [
-  {
-    label: 'Super',
-    value: 'vben',
-  },
-  {
-    label: 'Admin',
-    value: 'admin',
-  },
-  {
-    label: 'User',
-    value: 'jack',
-  },
-];
-
-const formSchema = computed((): VbenFormSchema[] => {
-  return [
-    {
-      component: 'VbenSelect',
-      componentProps: {
-        options: MOCK_USER_OPTIONS,
-        placeholder: $t('authentication.selectAccount'),
-      },
-      fieldName: 'selectAccount',
-      label: $t('authentication.selectAccount'),
-      rules: z
-        .string()
-        .min(1, { message: $t('authentication.selectAccount') })
-        .optional()
-        .default('vben'),
-    },
-    {
-      component: 'VbenInput',
-      componentProps: {
-        placeholder: $t('authentication.usernameTip'),
-      },
-      dependencies: {
-        trigger(values, form) {
-          if (values.selectAccount) {
-            const findUser = MOCK_USER_OPTIONS.find(
-              (item) => item.value === values.selectAccount,
-            );
-            if (findUser) {
-              form.setValues({
-                password: '123456',
-                username: findUser.value,
-              });
-            }
-          }
-        },
-        triggerFields: ['selectAccount'],
-      },
-      fieldName: 'username',
-      label: $t('authentication.username'),
-      rules: z.string().min(1, { message: $t('authentication.usernameTip') }),
-    },
-    {
-      component: 'VbenInputPassword',
-      componentProps: {
-        placeholder: $t('authentication.password'),
-      },
-      fieldName: 'password',
-      label: $t('authentication.password'),
-      rules: z.string().min(1, { message: $t('authentication.passwordTip') }),
-    },
-    {
-      component: markRaw(SliderCaptcha),
-      fieldName: 'captcha',
-      rules: z.boolean().refine((value) => value, {
-        message: $t('authentication.verifyRequiredTip'),
-      }),
-    },
-  ];
-});
+async function handleLogin() {
+  loading.value = true;
+  const redirect = route.query.redirect
+    ? decodeURIComponent(String(route.query.redirect))
+    : undefined;
+  try {
+    // 整页跳转到授权服务器，认证过程完全由 IdP 负责，前端不接触密码
+    await redirectToOAuth2Authorize(redirect);
+  } finally {
+    loading.value = false;
+  }
+}
 </script>
 
 <template>
-  <AuthenticationLogin
-    :form-schema="formSchema"
-    :loading="authStore.loginLoading"
-    @submit="authStore.authLogin"
-  />
+  <div class="flex w-full flex-col items-center gap-6 py-6">
+    <p class="text-center text-sm text-muted-foreground">
+      通过统一身份认证登录系统
+    </p>
+    <ElButton
+      class="w-full"
+      :loading="loading"
+      size="large"
+      type="primary"
+      @click="handleLogin"
+    >
+      统一认证登录
+    </ElButton>
+  </div>
 </template>
