@@ -1,0 +1,15 @@
+{
+  "title": "Access Control",
+  "user": "Users",
+  "role": "Roles",
+  "organization": "Organizations",
+  "department": "Departments",
+  "menu": "Menus",
+  "permission": "Permissions",
+  "client": "OAuth2 Clients",
+  "scope": "OAuth2 Scopes",
+  "post": "Positions",
+  "dict": "Dictionaries",
+  "online": "Online Users",
+  "log": "Operation Logs"
+}
