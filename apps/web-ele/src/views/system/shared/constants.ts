@@ -132,14 +132,5 @@ export const GRANT_TYPE_OPTIONS = [
   'urn:ietf:params:oauth:grant-type:device_code',
 ];
 
-/** OAuth2 客户端：常用 scope（openid 由后端无条件注入，不入库存） */
-export const SCOPE_OPTIONS = [
-  'profile',
-  'email',
-  'address',
-  'phone',
-  'offline_access',
-];
-
 /** 客户端详情里常见的 token 格式 */
 export const TOKEN_FORMAT_OPTIONS = ['self-contained', 'reference', 'jwt'];

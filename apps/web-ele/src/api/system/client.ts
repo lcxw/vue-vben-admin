@@ -45,10 +45,22 @@ export interface OAuth2ClientForm {
   scopes: string[];
 }
 
-/** OAuth2Scope：单表化后是 oauth2_client.scopes 的投影视图 */
-export interface OAuth2Scope {
-  clientId: string;
+/**
+ * OAuth2 scope 全局定义（定义与 client 关联分离）。
+ *
+ * 定义只描述 scope 是什么；某个 client 允许哪些 scope 仍由
+ * oauth2_client.scopes JSON 列维护，在客户端编辑表单里配置。
+ * openid 是内置定义，由后端自动注入，不可删除。
+ */
+export interface OAuth2ScopeDefinition {
+  builtIn?: boolean;
+  clientCount?: number;
   description?: null | string;
+  scope: string;
+}
+
+export interface OAuth2ScopeDefinitionForm {
+  description?: string;
   scope: string;
 }
 
@@ -99,28 +111,23 @@ export function deleteClient(id: string) {
   return requestClient.post(`/system/client/remove/${id}`);
 }
 
-/** 全量 scope 列表：GET /system/scope/list */
-export function getScopeList(): Promise<OAuth2Scope[]> {
-  return requestClient.get<OAuth2Scope[]>('/system/scope/list');
+/** 全量 scope 定义：GET /system/scope/list */
+export function getScopeDefinitions(): Promise<OAuth2ScopeDefinition[]> {
+  return requestClient.get<OAuth2ScopeDefinition[]>('/system/scope/list');
 }
 
-/** 按客户端查 scope：GET /system/scope/listByClient */
-export function getScopesByClientId(clientId: string): Promise<OAuth2Scope[]> {
-  return requestClient.get<OAuth2Scope[]>('/system/scope/listByClient', {
-    params: { clientId },
-  });
+/** 新增/更新 scope 定义：POST /system/scope/save */
+export function saveScopeDefinition(
+  data: OAuth2ScopeDefinitionForm,
+): Promise<OAuth2ScopeDefinition> {
+  return requestClient.post<OAuth2ScopeDefinition>('/system/scope/save', data);
 }
 
-/** 新增/更新 scope：POST /system/scope/save */
-export function saveScope(data: OAuth2Scope): Promise<OAuth2Scope> {
-  return requestClient.post<OAuth2Scope>('/system/scope/save', data);
-}
-
-/** 删除 scope：POST /system/scope/remove（query 参数） */
-export function deleteScope(clientId: string, scope: string) {
+/** 删除 scope 定义：POST /system/scope/remove（query 参数） */
+export function deleteScopeDefinition(scope: string) {
   return requestClient.post(
     '/system/scope/remove',
     {},
-    { params: { clientId, scope } },
+    { params: { scope } },
   );
 }

@@ -7,7 +7,7 @@
   "menu": "Menus",
   "permission": "Permissions",
   "client": "OAuth2 Clients",
-  "scope": "OAuth2 Scopes",
+  "scope": "Scope Definitions",
   "post": "Positions",
   "dict": "Dictionaries",
   "online": "Online Users",
