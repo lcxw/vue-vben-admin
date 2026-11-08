@@ -16,11 +16,9 @@ import { reactive, ref, watch } from 'vue';
 
 import { ElForm, ElFormItem, ElInput, ElMessage } from 'element-plus';
 
-import {
-  AUTH_METHOD_OPTIONS,
-  GRANT_TYPE_OPTIONS,
-  SCOPE_OPTIONS,
-} from '../shared/constants';
+import { getScopeDefinitions } from '#/api/system';
+
+import { AUTH_METHOD_OPTIONS, GRANT_TYPE_OPTIONS } from '../shared/constants';
 import { normalizeStringList } from '../shared/helpers';
 import JsonSetEditor from '../shared/JsonSetEditor.vue';
 import { L } from '../shared/labels';
@@ -45,6 +43,19 @@ function createModel(): OAuth2ClientForm {
 }
 
 const model = reactive<OAuth2ClientForm>(createModel());
+
+/** scope 快捷选项来自「Scope 定义」页面；关联本身仍写入 oauth2_client.scopes。 */
+const scopeOptions = ref<string[]>([]);
+
+getScopeDefinitions()
+  .then((definitions) => {
+    scopeOptions.value = (definitions ?? [])
+      .map((item) => item.scope)
+      .filter((item) => item !== 'openid');
+  })
+  .catch((error) => {
+    console.error('[system/client] load scope definitions failed', error);
+  });
 
 const rules: FormRules = {
   clientId: [
@@ -200,7 +211,7 @@ defineExpose({ submit });
     <ElFormItem :label="L.client.scopes">
       <JsonSetEditor
         v-model="model.scopes"
-        :suggestions="SCOPE_OPTIONS"
+        :suggestions="scopeOptions"
         placeholder="例如 profile"
       />
     </ElFormItem>

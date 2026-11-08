@@ -7,7 +7,7 @@
   "menu": "菜单管理",
   "permission": "权限点管理",
   "client": "OAuth2 客户端",
-  "scope": "OAuth2 Scope",
+  "scope": "Scope 定义",
   "post": "岗位管理",
   "dict": "数据字典",
   "online": "在线用户",
