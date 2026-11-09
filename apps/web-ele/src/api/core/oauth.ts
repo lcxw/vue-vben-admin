@@ -14,11 +14,35 @@ const AUTH_URL: string =
   import.meta.env.VITE_GLOB_AUTH_URL || 'http://127.0.0.1:20005';
 const CLIENT_ID: string =
   import.meta.env.VITE_GLOB_OAUTH_CLIENT_ID || 'web-spa';
-const REDIRECT_URI: string =
-  import.meta.env.VITE_GLOB_OAUTH_REDIRECT_URI ||
-  `${window.location.origin}/oauth2/callback`;
+const ENV_REDIRECT_URI: string =
+  import.meta.env.VITE_GLOB_OAUTH_REDIRECT_URI || '';
 const SCOPE: string =
   import.meta.env.VITE_GLOB_OAUTH_SCOPE || 'openid profile email';
+
+/**
+ * 解析回调地址。
+ *
+ * state / code_verifier 暂存在 sessionStorage，而 sessionStorage 按 origin 隔离：
+ * localhost 与 127.0.0.1 端口相同也是两个不同的源。若授权时与回调落地时不在同一个源，
+ * 回调页将读不到暂存的 state，必然报「state 校验失败」（典型表现是第一次 SSO 失败、
+ * 重试即成功，因为重试时浏览器已停在回调源上）。
+ *
+ * 因此默认跟随当前访问源；仅当部署方显式配置 VITE_GLOB_OAUTH_REDIRECT_URI
+ * （且回调地址已在授权服务器注册）时才使用固定值。
+ */
+function getRedirectUri(): string {
+  const currentOrigin = window.location.origin;
+  if (ENV_REDIRECT_URI) {
+    if (new URL(ENV_REDIRECT_URI).origin !== currentOrigin) {
+      console.warn(
+        `[oauth2] VITE_GLOB_OAUTH_REDIRECT_URI(${ENV_REDIRECT_URI}) 与当前访问源(${currentOrigin})不一致，` +
+          '回调页将读不到 sessionStorage 中的 state，建议清空该配置使其跟随当前源。',
+      );
+    }
+    return ENV_REDIRECT_URI;
+  }
+  return `${currentOrigin}/oauth2/callback`;
+}
 
 const STATE_KEY = 'oauth2_state';
 const VERIFIER_KEY = 'oauth2_code_verifier';
@@ -75,7 +99,7 @@ async function buildAuthorizeUrl(redirectPath?: string): Promise<string> {
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: CLIENT_ID,
-    redirect_uri: REDIRECT_URI,
+    redirect_uri: getRedirectUri(),
     scope: SCOPE,
     state,
     code_challenge: codeChallenge,
@@ -114,7 +138,7 @@ export async function exchangeCodeForToken(
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
     code,
-    redirect_uri: REDIRECT_URI,
+    redirect_uri: getRedirectUri(),
     client_id: CLIENT_ID,
     code_verifier: codeVerifier,
   });
