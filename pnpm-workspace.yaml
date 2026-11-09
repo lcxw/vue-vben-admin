@@ -103,6 +103,8 @@ catalog:
   archiver: ^8.0.0
   axios: ^1.18.1
   axios-mock-adapter: ^2.1.0
+  # 流程设计器（bpmn-js 18 + 橙单 flowableDescriptor 扩展）
+  bpmn-js: 18.16.1
   cac: ^7.0.0
   chalk: ^5.6.2
   cheerio: ^1.2.0
