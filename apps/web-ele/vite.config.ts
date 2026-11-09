@@ -12,7 +12,16 @@ export default defineConfig(async () => {
         ElementPlus({ format: 'esm' }),
       ],
       server: {
+        // 顺序敏感：'/api/flow' 必须写在 '/api' 之前，否则会被通用规则吞掉，
+        // 流程接口会被错误转发到 20005(system-server) 而返回 404。
         proxy: {
+          '/api/flow': {
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/api/, ''),
+            // lunar-cloud workflow-server（流程配置 + Flowable 引擎）
+            target: 'http://localhost:20007',
+            ws: true,
+          },
           '/api': {
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/api/, ''),
