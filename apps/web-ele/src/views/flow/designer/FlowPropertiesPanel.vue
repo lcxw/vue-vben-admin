@@ -46,6 +46,8 @@ const emit = defineEmits<{ changed: [] }>();
 const activeTab = ref('base');
 const loadingOptions = ref(false);
 const options = ref<FlowIdentityVO[]>([]);
+/** 抄送人固定按用户选，与「参与人类型」无关，单独维护一份选项 */
+const copyOptions = ref<FlowIdentityVO[]>([]);
 
 const form = reactive({
   assigneeIds: [] as string[],
@@ -139,6 +141,17 @@ function syncForm() {
 }
 
 watch(() => props.element, syncForm, { immediate: true });
+
+async function loadCopyOptions() {
+  if (copyOptions.value.length > 0) return;
+  try {
+    copyOptions.value = await getFlowUsers();
+  } catch (error) {
+    console.error('[flow] load copy user options failed', error);
+    copyOptions.value = [];
+  }
+}
+void loadCopyOptions();
 
 async function loadOptions() {
   loadingOptions.value = true;
@@ -282,15 +295,16 @@ function applyCopy() {
 }
 
 function applyMultiInstance() {
-  if (syncing || !props.modeler) return;
+  if (syncing || !props.modeler || !props.element) return;
   const moddle = props.modeler.get('moddle');
-  const bo = businessObject();
   const loop = form.multiInstance
     ? moddle.create('bpmn:MultiInstanceLoopCharacteristics', {
         isSequential: false,
       })
     : undefined;
-  bo.set('loopCharacteristics', loop);
+  // 必须走 modeling.updateProperties：直接改 businessObject 不会重绘画布，
+  // 也不会进入命令栈（撤销/重做与脏标记都会丢）。
+  modeling()?.updateProperties(props.element, { loopCharacteristics: loop });
   emit('changed');
 }
 
@@ -377,10 +391,17 @@ const isUserTask = () => props.element?.type === 'bpmn:UserTask';
               clearable
               collapse-tags
               style="width: 100%"
-              placeholder="按用户 Id 填写/选择"
+              placeholder="选择或输入用户 Id"
               allow-create
               @change="applyCopy"
-            />
+            >
+              <ElOption
+                v-for="item in copyOptions"
+                :key="item.id"
+                :label="item.name"
+                :value="item.id"
+              />
+            </ElSelect>
           </ElFormItem>
         </ElForm>
       </ElTabPane>
@@ -427,5 +448,14 @@ const isUserTask = () => props.element?.type === 'bpmn:UserTask';
   color: var(--el-text-color-secondary);
   font-size: 12px;
   line-height: 1.6;
+}
+
+/*
+ * 面板固定 380px 宽，Element Plus 默认 tab 间距会把第 4 个「其他设置」挤到视野外
+ * （表现为只看到「其」）。这里压缩内边距与字号，保证 4 个 tab 完整可见。
+ */
+.flow-properties :deep(.el-tabs__item) {
+  padding: 0 10px;
+  font-size: 13px;
 }
 </style>
