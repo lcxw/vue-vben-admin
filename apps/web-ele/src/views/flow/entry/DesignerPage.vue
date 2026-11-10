@@ -5,7 +5,7 @@ import type {
   FlowVariableVO,
 } from '#/api/flow';
 
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import {
@@ -68,7 +68,10 @@ const variables = ref<FlowVariableVO[]>([]);
 const categories = ref<CategoryOption[]>([]);
 const bpmnXml = ref('');
 const extensionData = ref('');
-const designerRef = ref<{ getXml: () => Promise<string> }>();
+const designerRef = ref<{
+  getXml: () => Promise<string>;
+  resize: () => void;
+}>();
 
 const variableFormVisible = ref(false);
 const editingVariable = ref<null | FlowVariableVO>(null);
@@ -108,6 +111,15 @@ async function load() {
 }
 
 onMounted(load);
+
+/**
+ * 「流程设计」步骤是 v-show 切换的：设计器首次挂载时容器还是 display:none，
+ * bpmn-js 会以 0×0 初始化，切到该步骤后画布一片空白。这里在切换到第 4 步时
+ * 让画布重新测量尺寸并自适应，这是「设计器打开是白板」的直接修复点。
+ */
+watch(activeStep, (step) => {
+  if (step === 3) designerRef.value?.resize();
+});
 
 async function onSave() {
   if (!entry.value) return;
