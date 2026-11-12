@@ -4,5 +4,9 @@
   "category": "流程分类",
   "design": "流程设计",
   "variable": "流程变量",
-  "version": "版本管理"
+  "version": "版本管理",
+  "todo": "我的待办",
+  "done": "我的已办",
+  "mine": "我发起的",
+  "monitor": "流程监控"
 }

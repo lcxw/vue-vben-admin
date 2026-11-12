@@ -41,6 +41,30 @@ const routes: RouteRecordRaw[] = [
         path: 'category',
         component: () => import('#/views/flow/category/index.vue'),
       },
+      {
+        meta: { icon: 'lucide:inbox', title: $t('flow.todo') },
+        name: 'FlowTodo',
+        path: 'task/todo',
+        component: () => import('#/views/flow/task/TodoPage.vue'),
+      },
+      {
+        meta: { icon: 'lucide:circle-check', title: $t('flow.done') },
+        name: 'FlowDone',
+        path: 'task/done',
+        component: () => import('#/views/flow/task/DonePage.vue'),
+      },
+      {
+        meta: { icon: 'lucide:send', title: $t('flow.mine') },
+        name: 'FlowMine',
+        path: 'runtime/mine',
+        component: () => import('#/views/flow/runtime/MinePage.vue'),
+      },
+      {
+        meta: { icon: 'lucide:chart-column', title: $t('flow.monitor') },
+        name: 'FlowMonitor',
+        path: 'monitor',
+        component: () => import('#/views/flow/monitor/index.vue'),
+      },
     ],
   },
 ];

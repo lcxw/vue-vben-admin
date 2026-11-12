@@ -4,5 +4,9 @@
   "category": "Categories",
   "design": "Process Designer",
   "variable": "Process Variables",
-  "version": "Versions"
+  "version": "Versions",
+  "todo": "My Tasks",
+  "done": "Completed Tasks",
+  "mine": "My Requests",
+  "monitor": "Monitoring"
 }

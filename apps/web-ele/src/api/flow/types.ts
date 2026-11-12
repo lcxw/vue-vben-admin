@@ -22,7 +22,7 @@ export interface FlowCategoryVO {
 }
 
 export type FlowCategoryDTO = Partial<FlowCategoryVO> &
-  Pick<FlowCategoryVO, 'name' | 'code'>;
+  Pick<FlowCategoryVO, 'code' | 'name'>;
 
 /** 流程定义 */
 export interface FlowEntryVO {
@@ -198,5 +198,228 @@ export function dictLabel(
   dict: readonly { label: string; value: number | string }[],
   value?: null | number | string,
 ): string {
-  return dict.find((item) => item.value === value)?.label ?? String(value ?? '');
+  return (
+    dict.find((item) => item.value === value)?.label ?? String(value ?? '')
+  );
 }
+
+// ---------------- 运行时（阶段 4B） ----------------
+/**
+ * 对齐 workflow-server 的 /flow/runtime、/flow/action、/flow/monitor 契约。
+ * 后端返回裸对象并由 requestClient 解包 Result<T>，分页是 MyBatis-Plus Page
+ * （records/total），由 toGridPage 转成 vxe-grid 的 items/total。
+ */
+
+export interface FlowTaskQuery extends PageQuery {
+  entryId?: string;
+  keyword?: string;
+  publicPoolOnly?: boolean;
+  startTimeBegin?: string;
+  startTimeEnd?: string;
+  status?: number;
+  userId?: string;
+}
+
+export interface FlowTaskVO {
+  approvalMode?: string;
+  approvalModeName?: string;
+  assignee?: string;
+  assigneeName?: string;
+  candidateUserIds?: string[];
+  claimed?: boolean;
+  createTime?: string;
+  dueTime?: string;
+  durationMs?: number;
+  endTime?: string;
+  engineTaskId?: string;
+  id: string;
+  initiator?: string;
+  initiatorName?: string;
+  orderTitle?: string;
+  processInstanceId?: string;
+  signType?: string;
+  status?: number;
+  statusName?: string;
+  taskDefKey?: string;
+  taskName?: string;
+  workOrderId?: string;
+}
+
+export interface FlowWorkOrderVO {
+  businessKey?: string;
+  currentNodeIds?: string;
+  durationMs?: number;
+  endTime?: string;
+  entryId?: string;
+  entryName?: string;
+  entryPublishId?: string;
+  processDefinitionId?: string;
+  processInstanceId?: string;
+  publishVersion?: number;
+  startTime?: string;
+  status?: number;
+  statusName?: string;
+  title?: string;
+  initiator?: string;
+  initiatorName?: string;
+  workOrderId: string;
+}
+
+/** 实例级通用请求：按端点只填用到的字段。 */
+export interface FlowOrderReq {
+  entryId?: string;
+  from?: string;
+  reason?: string;
+  targetNodeId?: string;
+  to?: string;
+  variables?: Record<string, unknown>;
+  workOrderId?: string;
+}
+
+export interface FlowStartReq {
+  assigneeHints?: Record<string, unknown>;
+  businessKey?: string;
+  draft?: boolean;
+  entryId?: string;
+  entryPublishId?: string;
+  formData?: Record<string, unknown>;
+  title?: string;
+  variables?: Record<string, unknown>;
+}
+
+export interface FlowTaskActionReq {
+  action: string;
+  attachmentJson?: string;
+  comment?: string;
+  formData?: Record<string, unknown>;
+  signType?: string;
+  targetNodeId?: string;
+  targetUserId?: string;
+  targetUserIds?: string[];
+  taskInstanceId?: string;
+  timeoutMinutes?: number;
+  variables?: Record<string, unknown>;
+  workOrderId?: string;
+}
+
+export interface FlowTaskCommentVO {
+  action?: string;
+  actionName?: string;
+  afterStatus?: number;
+  attachmentJson?: string;
+  beforeStatus?: number;
+  comment?: string;
+  createTime?: string;
+  engineTaskId?: string;
+  id?: string;
+  operatorId?: string;
+  operatorName?: string;
+  targetNodeId?: string;
+  targetUserId?: string;
+  taskInstanceId?: string;
+  taskName?: string;
+  workOrderId?: string;
+}
+
+export interface FlowTaskInstanceVO {
+  approvalMode?: string;
+  assignee?: string;
+  createTime?: string;
+  dueTime?: string;
+  durationMs?: number;
+  endTime?: string;
+  engineTaskId?: string;
+  id?: string;
+  parentTaskId?: string;
+  processInstanceId?: string;
+  signType?: string;
+  sortOrder?: number;
+  status?: number;
+  taskDefKey?: string;
+  taskName?: string;
+  workOrderId?: string;
+}
+
+/** 流程图高亮数据（由后端审计记录推导，不依赖 Flowable HistoryService）。 */
+export interface FlowHighlightVO {
+  activeNodeIds?: string[];
+  bpmnXml?: string;
+  completedFlowIds?: string[];
+  completedNodeIds?: string[];
+  rejectedNodeIds?: string[];
+}
+
+export interface FlowMonitorVO {
+  comments?: FlowTaskCommentVO[];
+  highlight?: FlowHighlightVO;
+  order?: Record<string, unknown>;
+  tasks?: FlowTaskInstanceVO[];
+  variables?: Record<string, unknown>;
+}
+
+/** 后端 FlowActionType 常量（审批历史/动作分发共用）。 */
+export const FLOW_ACTION = {
+  ACTIVATE: 'ACTIVATE',
+  ADD_SIGN_AFTER: 'ADD_SIGN_AFTER',
+  ADD_SIGN_BEFORE: 'ADD_SIGN_BEFORE',
+  ADD_SIGN_COUNTERSIGN: 'ADD_SIGN_COUNTERSIGN',
+  APPROVE: 'APPROVE',
+  CC: 'CC',
+  CLAIM: 'CLAIM',
+  COMMENT: 'COMMENT',
+  JUMP: 'JUMP',
+  REJECT: 'REJECT',
+  REMOVE_SIGN: 'REMOVE_SIGN',
+  RETURN_ANY: 'RETURN_ANY',
+  RETURN_INITIATOR: 'RETURN_INITIATOR',
+  RETURN_PREVIOUS: 'RETURN_PREVIOUS',
+  SUBMIT: 'SUBMIT',
+  SUSPEND: 'SUSPEND',
+  TAKE_BACK: 'TAKE_BACK',
+  TERMINATE: 'TERMINATE',
+  TRANSFER: 'TRANSFER',
+  URGE: 'URGE',
+  WITHDRAW: 'WITHDRAW',
+} as const;
+
+/** 待办页可发起的办理动作（需要目标用户/目标节点的动作单独带输入）。 */
+export const FLOW_TASK_ACTIONS = [
+  { label: '同意', value: FLOW_ACTION.APPROVE },
+  { label: '驳回', value: FLOW_ACTION.REJECT },
+  { label: '退回上一步', value: FLOW_ACTION.RETURN_PREVIOUS },
+  { label: '退回发起人', value: FLOW_ACTION.RETURN_INITIATOR },
+  { label: '拿回', value: FLOW_ACTION.TAKE_BACK },
+  { label: '转办', value: FLOW_ACTION.TRANSFER, needUser: true },
+  { label: '后加签', value: FLOW_ACTION.ADD_SIGN_AFTER, needUsers: true },
+  {
+    label: '会签加签',
+    value: FLOW_ACTION.ADD_SIGN_COUNTERSIGN,
+    needUsers: true,
+  },
+  { label: '会签减签', value: FLOW_ACTION.REMOVE_SIGN, needUsers: true },
+  { label: '抄送', value: FLOW_ACTION.CC, needUsers: true },
+  { label: '退回任意节点', value: FLOW_ACTION.RETURN_ANY, needNode: true },
+] as const;
+
+/** 与后端 FlowRuntimeStatus 的两套枚举保持一致，勿混用。 */
+export const FLOW_ORDER_STATUS = [
+  { label: '运行中', value: 0 },
+  { label: '已挂起', value: 1 },
+  { label: '已完成', value: 2 },
+  { label: '已驳回', value: 3 },
+  { label: '已撤回', value: 4 },
+  { label: '已终止', value: 5 },
+  { label: '暂存待审', value: 6 },
+] as const;
+
+export const FLOW_TASK_STATUS = [
+  { label: '待办', value: 0 },
+  { label: '办理中', value: 1 },
+  { label: '已完成', value: 2 },
+  { label: '已驳回', value: 3 },
+  { label: '已退回', value: 4 },
+  { label: '已转办', value: 5 },
+  { label: '已委派', value: 6 },
+  { label: '已取消', value: 7 },
+  { label: '已挂起', value: 8 },
+] as const;
