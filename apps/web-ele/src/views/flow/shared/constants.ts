@@ -34,6 +34,38 @@ export const FLOW_PERM = {
   },
 } as const;
 
+/**
+ * 流程运行时权限码，对应 sql/V4__flow_runtime_permission.sql。
+ * /flow/action/execute 是单入口动态鉴权，动作不同校验的 code 也不同，
+ * 因此这里按动作分组，前端按钮只做「是否显示」的提示性判断，服务端仍需校验。
+ */
+export const FLOW_RUNTIME_PERM = {
+  action: {
+    cc: 'flow:task:cc',
+    claim: 'flow:task:claim',
+    complete: 'flow:task:complete',
+    sign: 'flow:task:sign',
+    transfer: 'flow:task:transfer',
+  },
+  form: { edit: 'flow:form:edit', view: 'flow:form:view' },
+  monitor: {
+    history: 'flow:monitor:history',
+    stat: 'flow:monitor:stat',
+    view: 'flow:monitor:view',
+  },
+  notify: { urge: 'flow:notify:urge' },
+  runtime: {
+    jump: 'flow:runtime:jump',
+    list: 'flow:runtime:list',
+    start: 'flow:runtime:start',
+    suspend: 'flow:runtime:suspend',
+    terminate: 'flow:runtime:terminate',
+    view: 'flow:runtime:view',
+    withdraw: 'flow:runtime:withdraw',
+  },
+  task: { done: 'flow:task:done', todo: 'flow:task:todo' },
+} as const;
+
 /** 审批按钮（写入 BPMN 扩展属性 operationList） */
 export const FLOW_TASK_OPERATIONS = [
   { label: '同意', value: 'agree' },
