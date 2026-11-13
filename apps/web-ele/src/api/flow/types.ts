@@ -211,9 +211,11 @@ export function dictLabel(
  */
 
 export interface FlowTaskQuery extends PageQuery {
+  enabled?: number;
   entryId?: string;
   keyword?: string;
   publicPoolOnly?: boolean;
+  readFlag?: number;
   startTimeBegin?: string;
   startTimeEnd?: string;
   status?: number;
@@ -263,6 +265,42 @@ export interface FlowWorkOrderVO {
   initiator?: string;
   initiatorName?: string;
   workOrderId: string;
+}
+
+/** 「我的抄送」：/flow/runtime/listCc 的返回行。 */
+export interface FlowCcVO {
+  ccType?: string;
+  content?: string;
+  createTime?: string;
+  id: string;
+  initiatorName?: string;
+  orderStatus?: number;
+  orderStatusName?: string;
+  orderTitle?: string;
+  readFlag?: number;
+  readTime?: string;
+  senderId?: string;
+  taskInstanceId?: string;
+  userId?: string;
+  workOrderId?: string;
+}
+
+/** 「流程委托」：/flow/runtime/listDelegates 的返回行。 */
+export interface FlowDelegateVO {
+  agentId?: string;
+  agentName?: string;
+  createTime?: string;
+  delegateType?: string;
+  enabled?: number;
+  endTime?: string;
+  id: string;
+  orderTitle?: string;
+  ownerId?: string;
+  ownerName?: string;
+  returnToOwner?: number;
+  startTime?: string;
+  taskInstanceId?: string;
+  workOrderId?: string;
 }
 
 /** 实例级通用请求：按端点只填用到的字段。 */
@@ -368,6 +406,8 @@ export const FLOW_ACTION = {
   CLAIM: 'CLAIM',
   COMMENT: 'COMMENT',
   JUMP: 'JUMP',
+  PROXY: 'PROXY',
+  READ: 'READ',
   REJECT: 'REJECT',
   REMOVE_SIGN: 'REMOVE_SIGN',
   RETURN_ANY: 'RETURN_ANY',

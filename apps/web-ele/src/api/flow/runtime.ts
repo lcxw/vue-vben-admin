@@ -10,6 +10,8 @@
  *    详情抽屉只调这一个接口，避免多请求拼装产生状态不一致。
  */
 import type {
+  FlowCcVO,
+  FlowDelegateVO,
   FlowMonitorVO,
   FlowOrderReq,
   FlowStartReq,
@@ -69,6 +71,35 @@ export async function getFlowTodoPage(params: FlowTaskQuery) {
 export async function getFlowDonePage(params: FlowTaskQuery) {
   const page = await requestClient.post<BackendPage<FlowTaskVO>>(
     `${RUNTIME}/done`,
+    params,
+  );
+  return toGridPage(page);
+}
+
+// ---------------- 工作台：全部实例 / 抄送我的 / 流程委托 ----------------
+
+/** 全部流程实例（管理视图，分页）。 */
+export async function getFlowInstancePage(params: FlowTaskQuery) {
+  const page = await requestClient.post<BackendPage<FlowWorkOrderVO>>(
+    `${RUNTIME}/listAll`,
+    params,
+  );
+  return toGridPage(page);
+}
+
+/** 抄送我的（分页，readFlag 可选 0 未读 / 1 已读）。 */
+export async function getFlowCcPage(params: FlowTaskQuery) {
+  const page = await requestClient.post<BackendPage<FlowCcVO>>(
+    `${RUNTIME}/listCc`,
+    params,
+  );
+  return toGridPage(page);
+}
+
+/** 流程委托 / 代理记录（分页，enabled 可选）。 */
+export async function getFlowDelegatePage(params: FlowTaskQuery) {
+  const page = await requestClient.post<BackendPage<FlowDelegateVO>>(
+    `${RUNTIME}/listDelegates`,
     params,
   );
   return toGridPage(page);
