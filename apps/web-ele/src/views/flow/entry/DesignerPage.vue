@@ -37,6 +37,8 @@ import {
   dictLabel,
 } from '#/api/flow';
 
+import { getOnlineFormDict } from '#/api/online';
+
 import {
   confirmAction,
   usePermission,
@@ -66,6 +68,7 @@ const publishing = ref(false);
 const entry = ref<FlowEntryVO | null>(null);
 const variables = ref<FlowVariableVO[]>([]);
 const categories = ref<CategoryOption[]>([]);
+const onlineForms = ref<{ id: string; name: string; version?: number }[]>([]);
 const bpmnXml = ref('');
 const extensionData = ref('');
 const designerRef = ref<{
@@ -82,14 +85,16 @@ async function load() {
   if (!entryId.value) return;
   loading.value = true;
   try {
-    const [detail, vars, cats] = await Promise.all([
+    const [detail, vars, cats, forms] = await Promise.all([
       getFlowEntry(entryId.value),
       getFlowVariableList(entryId.value),
       getFlowCategoryDict(),
+      getOnlineFormDict().catch(() => []),
     ]);
     entry.value = detail;
     variables.value = vars;
     categories.value = cats;
+    onlineForms.value = forms;
     bpmnXml.value = detail.bpmnXml ?? '';
     extensionData.value = detail.extensionData ?? '';
     basicForm.value = {
@@ -268,8 +273,24 @@ function goBack() {
           <ElFormItem label="在线页面 Id">
             <ElInput v-model="basicForm.pageId" />
           </ElFormItem>
-          <ElFormItem label="默认表单 Id">
-            <ElInput v-model="basicForm.defaultFormId" />
+          <ElFormItem label="默认在线表单">
+            <ElSelect
+              v-model="basicForm.defaultFormId"
+              clearable
+              filterable
+              placeholder="选择已发布的在线表单（流程发起时渲染）"
+              style="width: 100%"
+            >
+              <ElOption
+                v-for="f in onlineForms"
+                :key="f.id"
+                :label="`${f.name} · V${f.version ?? 0}`"
+                :value="f.id"
+              />
+            </ElSelect>
+            <div class="hint">
+              在线表单需先在「在线表单 → 表单管理」中设计并发布；节点也可用 formKey 单独绑定。
+            </div>
           </ElFormItem>
           <ElFormItem label="前端路由名">
             <ElInput v-model="basicForm.defaultRouterName" />

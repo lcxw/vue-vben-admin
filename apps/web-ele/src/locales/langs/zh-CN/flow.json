@@ -5,8 +5,13 @@
   "design": "流程设计",
   "variable": "流程变量",
   "version": "版本管理",
+  "start": "发起流程",
   "todo": "我的待办",
+  "claim": "待签任务",
   "done": "我的已办",
   "mine": "我发起的",
+  "cc": "我的抄送",
+  "delegate": "流程委托",
+  "instance": "流程实例",
   "monitor": "流程监控"
 }

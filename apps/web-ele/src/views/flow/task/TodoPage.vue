@@ -20,7 +20,26 @@ import TaskActionDialog from '../runtime/TaskActionDialog.vue';
 const actionVisible = ref(false);
 const detailVisible = ref(false);
 const currentTask = ref<FlowTaskVO | null>(null);
+const currentAction = ref('');
 const currentOrderId = ref('');
+
+interface QuickAction {
+  code: string;
+  label: string;
+  style?: string;
+}
+
+/** 列表快捷按钮直接来自后端下发的节点按钮配置，未配置时回退「同意」。 */
+function quickActions(row: FlowTaskVO): QuickAction[] {
+  const ops = row.operations ?? [];
+  if (ops.length === 0) {
+    return [{ code: 'APPROVE', label: '同意', style: 'primary' }];
+  }
+  return ['APPROVE', 'REJECT', 'REFUSE']
+    .map((code) => ops.find((item) => item.code === code))
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .map((item) => ({ code: item.code, label: item.label, style: item.style }));
+}
 
 const searchSchema: VbenFormSchema[] = [
   { component: 'Input', fieldName: 'keyword', label: '关键字' },
@@ -75,7 +94,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
         fixed: 'right',
         slots: { default: 'action' },
         title: '操作',
-        width: 230,
+        width: 320,
       },
     ],
     height: 'auto',
@@ -96,8 +115,9 @@ const [Grid, gridApi] = useVbenVxeGrid({
   } as VxeTableGridOptions<FlowTaskVO>,
 });
 
-function openAction(row: FlowTaskVO) {
+function openAction(row: FlowTaskVO, action = '') {
   currentTask.value = row;
+  currentAction.value = action;
   actionVisible.value = true;
 }
 
@@ -141,6 +161,15 @@ function refresh() {
         >
           认领
         </ElButton>
+        <ElButton
+          v-for="op in quickActions(row)"
+          :key="op.code"
+          link
+          :type="op.style === 'danger' ? 'danger' : 'primary'"
+          @click="openAction(row, op.code)"
+        >
+          {{ op.label }}
+        </ElButton>
         <ElButton link type="primary" @click="openAction(row)">办理</ElButton>
         <ElButton link @click="openDetail(row)">详情</ElButton>
       </template>
@@ -148,6 +177,7 @@ function refresh() {
 
     <TaskActionDialog
       v-model="actionVisible"
+      :initial-action="currentAction"
       :task="currentTask ?? undefined"
       @changed="refresh"
     />

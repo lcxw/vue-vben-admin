@@ -15,6 +15,14 @@ export default defineConfig(async () => {
         // 顺序敏感：'/api/flow' 必须写在 '/api' 之前，否则会被通用规则吞掉，
         // 流程接口会被错误转发到 20005(system-server) 而返回 404。
         proxy: {
+          // '/api/online' 也必须在 '/api' 之前：在线表单接口由 workflow-server 提供。
+          '/api/online': {
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/api/, ''),
+            // lunar-cloud workflow-server（在线表单配置 + 数据）
+            target: 'http://localhost:20007',
+            ws: true,
+          },
           '/api/flow': {
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/api/, ''),

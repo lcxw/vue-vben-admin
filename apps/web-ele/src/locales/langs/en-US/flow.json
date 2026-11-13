@@ -5,8 +5,13 @@
   "design": "Process Designer",
   "variable": "Process Variables",
   "version": "Versions",
+  "start": "Start Process",
   "todo": "My Tasks",
+  "claim": "Claimable Tasks",
   "done": "Completed Tasks",
   "mine": "My Requests",
+  "cc": "Copied To Me",
+  "delegate": "Delegations",
+  "instance": "All Instances",
   "monitor": "Monitoring"
 }

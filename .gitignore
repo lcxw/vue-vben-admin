@@ -5,6 +5,8 @@ dist-ssr
 dist.zip
 dist.tar
 dist.war
+# 隐藏的临时验证构建目录（以 . 开头，dist-* 规则匹配不到），如 .verify-dist-4c
+.*-dist-*
 .nitro
 .output
 *-dist.zip

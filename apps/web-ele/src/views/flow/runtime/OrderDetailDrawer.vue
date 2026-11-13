@@ -8,6 +8,9 @@ import type {
   FlowTaskCommentVO,
   FlowTaskInstanceVO,
 } from '#/api/flow';
+import type { OnlineRenderVO } from '#/api/online';
+
+import { renderFlowForm } from '#/api/online';
 
 import { computed, ref, watch } from 'vue';
 
@@ -37,6 +40,7 @@ import {
 
 import { confirmAction, withFeedback } from '../../system/shared/helpers';
 import { safeString } from '../../system/shared/labels';
+import OnlineFormRenderer from '../../online/form/OnlineFormRenderer.vue';
 import FlowDiagram from '../designer/FlowDiagram.vue';
 
 const props = defineProps<{
@@ -57,6 +61,9 @@ const visible = computed({
 const loading = ref(false);
 const detail = ref<FlowMonitorVO>({});
 const activeTab = ref('diagram');
+/** 在线表单只读渲染模型；null 表示该流程未绑定在线表单 */
+const onlineRender = ref<null | OnlineRenderVO>(null);
+const onlineData = ref<Record<string, unknown>>({});
 
 const order = computed<Record<string, unknown>>(() => detail.value.order ?? {});
 const comments = computed<FlowTaskCommentVO[]>(
@@ -91,6 +98,18 @@ async function load() {
   try {
     detail.value = await getFlowMonitorDetail(props.workOrderId);
     activeTab.value = 'diagram';
+    onlineRender.value = null;
+    onlineData.value = {};
+    try {
+      const render = await renderFlowForm({
+        readOnly: true,
+        workOrderId: props.workOrderId,
+      });
+      onlineRender.value = render;
+      onlineData.value = { ...render.data };
+    } catch {
+      // 未绑定在线表单的流程不显示该 Tab
+    }
   } catch (error) {
     console.error('[flow] load monitor detail failed', error);
     detail.value = {};
@@ -236,6 +255,15 @@ async function onUrge() {
       </div>
 
       <ElTabs v-model="activeTab">
+        <ElTabPane v-if="onlineRender" label="业务表单" name="form">
+          <div class="online-form-wrap">
+            <OnlineFormRenderer
+              v-if="onlineRender"
+              v-model="onlineData"
+              :render="onlineRender"
+            />
+          </div>
+        </ElTabPane>
         <ElTabPane label="流程图（高亮）" name="diagram">
           <div class="legend">
             <span class="legend-item legend-done">已完成</span>
@@ -326,6 +354,13 @@ async function onUrge() {
   padding: 12px;
   overflow: auto;
   background: var(--el-fill-color-light);
+  border-radius: 4px;
+}
+.online-form-wrap {
+  max-height: 460px;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--el-border-color-lighter);
   border-radius: 4px;
 }
 </style>

@@ -3,11 +3,13 @@ import type { RouteRecordRaw } from 'vue-router';
 import { $t } from '#/locales';
 
 /**
- * 流程配置模块内置路由。
+ * 流程模块内置路由。
  *
  * preferences.app.accessMode = 'mixed'：与后端 /menu/all 下发的菜单按 name 合并，
- * 后端 permission 表还没补节点时内置路由仍可见（菜单种子见
- * backend/.../workflow-server/src/main/resources/sql/V2__flow_menu_permission.sql）。
+ * 后端菜单的 name 必须与这里的 name 完全一致，否则会生成重复菜单项；
+ * component 也必须写成 '/flow/xxx.vue' 形式，否则 generate-routes-backend 会
+ * 找不到 pageMap 里的视图、把菜单替换成 404 页。
+ * 菜单种子见 backend/.../system-server/src/main/resources/sql/V8__flow_menu_cleanup.sql。
  */
 const routes: RouteRecordRaw[] = [
   {
@@ -42,10 +44,22 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/views/flow/category/index.vue'),
       },
       {
+        meta: { icon: 'lucide:send', title: $t('flow.start') },
+        name: 'FlowStart',
+        path: 'runtime/start',
+        component: () => import('#/views/flow/runtime/StartPage.vue'),
+      },
+      {
         meta: { icon: 'lucide:inbox', title: $t('flow.todo') },
         name: 'FlowTodo',
         path: 'task/todo',
         component: () => import('#/views/flow/task/TodoPage.vue'),
+      },
+      {
+        meta: { icon: 'lucide:hand', title: $t('flow.claim') },
+        name: 'FlowClaim',
+        path: 'task/claim',
+        component: () => import('#/views/flow/task/ClaimPage.vue'),
       },
       {
         meta: { icon: 'lucide:circle-check', title: $t('flow.done') },
@@ -54,10 +68,28 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/views/flow/task/DonePage.vue'),
       },
       {
-        meta: { icon: 'lucide:send', title: $t('flow.mine') },
+        meta: { icon: 'lucide:user-round', title: $t('flow.mine') },
         name: 'FlowMine',
         path: 'runtime/mine',
         component: () => import('#/views/flow/runtime/MinePage.vue'),
+      },
+      {
+        meta: { icon: 'lucide:mail', title: $t('flow.cc') },
+        name: 'FlowCc',
+        path: 'task/cc',
+        component: () => import('#/views/flow/task/CcPage.vue'),
+      },
+      {
+        meta: { icon: 'lucide:user-switch', title: $t('flow.delegate') },
+        name: 'FlowDelegate',
+        path: 'runtime/delegate',
+        component: () => import('#/views/flow/runtime/DelegatePage.vue'),
+      },
+      {
+        meta: { icon: 'lucide:list', title: $t('flow.instance') },
+        name: 'FlowInstance',
+        path: 'runtime/instances',
+        component: () => import('#/views/flow/runtime/InstancePage.vue'),
       },
       {
         meta: { icon: 'lucide:chart-column', title: $t('flow.monitor') },

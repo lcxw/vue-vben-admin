@@ -179,20 +179,120 @@ export const FLOW_DIAGRAM_TYPE = [
   { label: '钉钉风格', value: 1 },
 ] as const;
 
-/** 节点参与人类型（橙单 UserTask.vue 的 11 项，本项目首版实现前 5 项 + 变量/表达式） */
+/**
+ * 节点参与人类型：与后端 FlowConstant.GROUP_TYPE_* 一一对应（11 项）。
+ * 阶段 6 去掉了后端无实现的 users、补上预留的 api；hint 用于设计器场景说明，
+ * kind 决定 FlowSceneForm 渲染哪一类配置控件。
+ */
 export const FLOW_GROUP_TYPE = [
-  { label: '指定用户', value: 'user' },
-  { label: '候选用户组', value: 'users' },
-  { label: '指定角色', value: 'role' },
-  { label: '指定部门', value: 'dept' },
-  { label: '指定岗位', value: 'post' },
-  { label: '流程变量', value: 'variable' },
-  { label: '变量表达式', value: 'expression' },
-  { label: '发起人领导', value: 'deptPostLeader' },
-  { label: '发起人上级领导', value: 'upDeptPostLeader' },
-  { label: '流程环节处理人', value: 'otherTaskSubmitter' },
-  { label: '自动执行', value: 'autoExec' },
+  {
+    hint: '从组织架构中挑选具体办理人',
+    kind: 'user',
+    label: '指定用户',
+    value: 'user',
+  },
+  {
+    hint: '该角色下的所有用户',
+    kind: 'list',
+    label: '指定角色',
+    value: 'role',
+  },
+  {
+    hint: '该部门及子部门下的所有用户',
+    kind: 'tree',
+    label: '指定部门',
+    value: 'dept',
+  },
+  {
+    hint: '拥有该岗位的所有用户',
+    kind: 'list',
+    label: '指定岗位',
+    value: 'post',
+  },
+  {
+    hint: '从流程变量中读取办理人 Id',
+    kind: 'variable',
+    label: '流程变量',
+    value: 'variable',
+  },
+  {
+    hint: '支持变量占位、var: 前缀或逗号分隔的用户 Id',
+    kind: 'expression',
+    label: '变量表达式',
+    value: 'expression',
+  },
+  {
+    hint: '发起人所在部门的负责人',
+    kind: 'leader',
+    label: '发起人领导',
+    value: 'deptPostLeader',
+  },
+  {
+    hint: '沿部门树上溯 N 级主管',
+    kind: 'levels',
+    label: '发起人上级领导',
+    value: 'upDeptPostLeader',
+  },
+  {
+    hint: '复用指定 BPMN 节点的上一个办理人',
+    kind: 'node',
+    label: '流程环节处理人',
+    value: 'otherTaskSubmitter',
+  },
+  {
+    hint: '无需人工办理，自动跳过该节点',
+    kind: 'auto',
+    label: '自动执行',
+    value: 'autoExec',
+  },
+  {
+    hint: '预留：由外部接口返回办理人 Id 列表',
+    kind: 'api',
+    label: '外部 API',
+    value: 'api',
+  },
 ] as const;
+
+/** 设计器审批人场景的完整配置，与后端 flowable:Properties 的键一一对应。 */
+export interface FlowSceneConfig {
+  apiUrl: string;
+  approvalMode: string;
+  autoExec: boolean;
+  copyUserIds: string[];
+  deptIds: string[];
+  expression: string;
+  groupType: string;
+  levels: number;
+  otherTaskId: string;
+  passRatio: string;
+  postIds: string[];
+  roleIds: string[];
+  skipDuplicate: boolean;
+  skipWhenEmpty: boolean;
+  userIds: string[];
+  variableName: string;
+}
+
+export function emptySceneConfig(): FlowSceneConfig {
+  return {
+    apiUrl: '',
+    approvalMode: 'SINGLE',
+    autoExec: false,
+    copyUserIds: [],
+    deptIds: [],
+    expression: '',
+    groupType: 'user',
+    levels: 1,
+    otherTaskId: '',
+    passRatio: '',
+    postIds: [],
+    roleIds: [],
+    skipDuplicate: true,
+    skipWhenEmpty: true,
+    userIds: [],
+    variableName: '',
+  };
+}
 
 export function dictLabel(
   dict: readonly { label: string; value: number | string }[],
@@ -211,13 +311,96 @@ export function dictLabel(
  */
 
 export interface FlowTaskQuery extends PageQuery {
+  enabled?: number;
   entryId?: string;
   keyword?: string;
   publicPoolOnly?: boolean;
+  readFlag?: number;
   startTimeBegin?: string;
   startTimeEnd?: string;
   status?: number;
   userId?: string;
+}
+
+/** 节点按钮视图：由后端 zz_flow_task_ext.operation_list_json 下发。 */
+export interface FlowOperationVO {
+  code: string;
+  icon?: string;
+  label: string;
+  needNode?: boolean;
+  needUser?: boolean;
+  needUsers?: boolean;
+  order?: number;
+  style?: string;
+}
+
+/** 选人分页结果。 */
+export interface FlowIdentityPageVO {
+  records: FlowIdentityVO[];
+  total: number;
+}
+
+/** 部门 / 组织树节点。 */
+export interface FlowIdentityNodeVO {
+  children?: FlowIdentityNodeVO[];
+  code?: string;
+  id: string;
+  name: string;
+  parentId?: string;
+  type?: string;
+}
+
+export interface FlowIdentityQueryReq {
+  deptIds?: number[];
+  ids?: string[];
+  keyword?: string;
+  pageNum?: number;
+  pageSize?: number;
+  roleIds?: string[];
+}
+
+/** 审批人场景预览请求（与运行时使用同一套解析逻辑）。 */
+export interface FlowAssigneePreviewReq {
+  apiUrl?: string;
+  autoExec?: boolean;
+  deptIds?: number[];
+  expression?: string;
+  groupType: string;
+  initiator?: string;
+  levels?: number;
+  otherTaskId?: string;
+  postIds?: string[];
+  roleIds?: string[];
+  skipDuplicate?: boolean;
+  skipWhenEmpty?: boolean;
+  taskSubmitters?: Record<string, string>;
+  userIds?: string[];
+  variableName?: string;
+  variables?: Record<string, unknown>;
+}
+
+export interface FlowStatisticsVO {
+  avgDurationMs?: number;
+  backlogTasks?: number;
+  byStatus?: Record<string, number>;
+  returnedOrders?: number;
+  returnRate?: number;
+  totalOrders?: number;
+}
+
+export interface FlowTrendRow {
+  bucket?: string;
+  completed?: number;
+  started?: number;
+}
+
+export interface FlowRankingRow {
+  avgDurationMs?: number;
+  completed?: number;
+  completionRate?: number;
+  entryId?: string;
+  entryName?: string;
+  total?: number;
 }
 
 export interface FlowTaskVO {
@@ -236,6 +419,10 @@ export interface FlowTaskVO {
   initiator?: string;
   initiatorName?: string;
   orderTitle?: string;
+  /** 该节点配置的审批按钮；后端未配置时回退默认按钮集。 */
+  operations?: FlowOperationVO[];
+  /** 本实例的用户任务节点（退回任意节点下拉用）。 */
+  nodeOptions?: Array<{ id: string; name: string }>;
   processInstanceId?: string;
   signType?: string;
   status?: number;
@@ -265,9 +452,47 @@ export interface FlowWorkOrderVO {
   workOrderId: string;
 }
 
+/** 「我的抄送」：/flow/runtime/listCc 的返回行。 */
+export interface FlowCcVO {
+  ccType?: string;
+  content?: string;
+  createTime?: string;
+  id: string;
+  initiatorName?: string;
+  orderStatus?: number;
+  orderStatusName?: string;
+  orderTitle?: string;
+  readFlag?: number;
+  readTime?: string;
+  senderId?: string;
+  taskInstanceId?: string;
+  userId?: string;
+  workOrderId?: string;
+}
+
+/** 「流程委托」：/flow/runtime/listDelegates 的返回行。 */
+export interface FlowDelegateVO {
+  agentId?: string;
+  agentName?: string;
+  createTime?: string;
+  delegateType?: string;
+  enabled?: number;
+  endTime?: string;
+  id: string;
+  orderTitle?: string;
+  ownerId?: string;
+  ownerName?: string;
+  returnToOwner?: number;
+  startTime?: string;
+  taskInstanceId?: string;
+  workOrderId?: string;
+}
+
 /** 实例级通用请求：按端点只填用到的字段。 */
 export interface FlowOrderReq {
   entryId?: string;
+  /** 监控趋势分桶：day / week / month */
+  interval?: string;
   from?: string;
   reason?: string;
   targetNodeId?: string;
@@ -279,6 +504,8 @@ export interface FlowOrderReq {
 export interface FlowStartReq {
   assigneeHints?: Record<string, unknown>;
   businessKey?: string;
+  /** 在线表单 Id（绑定在线表单时由发起弹窗填入，后端同事务落库） */
+  formId?: string;
   draft?: boolean;
   entryId?: string;
   entryPublishId?: string;
@@ -290,6 +517,7 @@ export interface FlowStartReq {
 export interface FlowTaskActionReq {
   action: string;
   attachmentJson?: string;
+  formId?: string;
   comment?: string;
   formData?: Record<string, unknown>;
   signType?: string;
@@ -367,9 +595,15 @@ export const FLOW_ACTION = {
   CC: 'CC',
   CLAIM: 'CLAIM',
   COMMENT: 'COMMENT',
+  DELEGATE: 'DELEGATE',
   JUMP: 'JUMP',
+  PROXY: 'PROXY',
+  READ: 'READ',
   REJECT: 'REJECT',
+  /** 拒绝：终态终止，与驳回（可重提）语义不同 */
+  REFUSE: 'REFUSE',
   REMOVE_SIGN: 'REMOVE_SIGN',
+  REPLACE_ASSIGNEE: 'REPLACE_ASSIGNEE',
   RETURN_ANY: 'RETURN_ANY',
   RETURN_INITIATOR: 'RETURN_INITIATOR',
   RETURN_PREVIOUS: 'RETURN_PREVIOUS',
@@ -386,10 +620,12 @@ export const FLOW_ACTION = {
 export const FLOW_TASK_ACTIONS = [
   { label: '同意', value: FLOW_ACTION.APPROVE },
   { label: '驳回', value: FLOW_ACTION.REJECT },
+  { label: '拒绝', value: FLOW_ACTION.REFUSE },
   { label: '退回上一步', value: FLOW_ACTION.RETURN_PREVIOUS },
   { label: '退回发起人', value: FLOW_ACTION.RETURN_INITIATOR },
   { label: '拿回', value: FLOW_ACTION.TAKE_BACK },
   { label: '转办', value: FLOW_ACTION.TRANSFER, needUser: true },
+  { label: '前加签', value: FLOW_ACTION.ADD_SIGN_BEFORE, needUsers: true },
   { label: '后加签', value: FLOW_ACTION.ADD_SIGN_AFTER, needUsers: true },
   {
     label: '会签加签',
@@ -398,6 +634,9 @@ export const FLOW_TASK_ACTIONS = [
   },
   { label: '会签减签', value: FLOW_ACTION.REMOVE_SIGN, needUsers: true },
   { label: '抄送', value: FLOW_ACTION.CC, needUsers: true },
+  { label: '意见', value: FLOW_ACTION.COMMENT },
+  { label: '撤回', value: FLOW_ACTION.WITHDRAW },
+  { label: '终止', value: FLOW_ACTION.TERMINATE },
   { label: '退回任意节点', value: FLOW_ACTION.RETURN_ANY, needNode: true },
 ] as const;
 
