@@ -55,6 +55,7 @@ export const FLOW_RUNTIME_PERM = {
   },
   notify: { urge: 'flow:notify:urge' },
   runtime: {
+    delete: 'flow:runtime:delete',
     jump: 'flow:runtime:jump',
     list: 'flow:runtime:list',
     start: 'flow:runtime:start',
@@ -66,13 +67,33 @@ export const FLOW_RUNTIME_PERM = {
   task: { done: 'flow:task:done', todo: 'flow:task:todo' },
 } as const;
 
-/** 审批按钮（写入 BPMN 扩展属性 operationList） */
+/**
+ * 审批按钮（写入 BPMN 扩展属性 OperationList）。
+ *
+ * 阶段 6：value 统一改成后端 FlowActionType 的大写动作码，
+ * 与设计期旧草稿的小写值不再混用；后端 FlowTaskOperationResolver
+ * 对存量小写值做一次性迁移映射。新建节点默认全选本集合。
+ */
 export const FLOW_TASK_OPERATIONS = [
-  { label: '同意', value: 'agree' },
-  { label: '驳回', value: 'reject' },
-  { label: '退回', value: 'back' },
-  { label: '转办', value: 'transfer' },
-  { label: '加签', value: 'addSign' },
-  { label: '撤回', value: 'revoke' },
-  { label: '终止', value: 'stop' },
+  { label: '同意', style: 'primary', value: 'APPROVE' },
+  { label: '驳回', style: 'danger', value: 'REJECT' },
+  { label: '拒绝', style: 'danger', value: 'REFUSE' },
+  { label: '退回上一步', style: 'danger', value: 'RETURN_PREVIOUS' },
+  { label: '退回发起人', style: 'danger', value: 'RETURN_INITIATOR' },
+  { label: '退回任意节点', style: 'danger', value: 'RETURN_ANY' },
+  { label: '拿回', style: 'default', value: 'TAKE_BACK' },
+  { label: '转办', style: 'default', value: 'TRANSFER' },
+  { label: '前加签', style: 'default', value: 'ADD_SIGN_BEFORE' },
+  { label: '后加签', style: 'default', value: 'ADD_SIGN_AFTER' },
+  { label: '会签加签', style: 'default', value: 'ADD_SIGN_COUNTERSIGN' },
+  { label: '会签减签', style: 'default', value: 'REMOVE_SIGN' },
+  { label: '抄送', style: 'default', value: 'CC' },
+  { label: '意见', style: 'default', value: 'COMMENT' },
+  { label: '撤回', style: 'default', value: 'WITHDRAW' },
+  { label: '终止', style: 'danger', value: 'TERMINATE' },
 ] as const;
+
+/** 新建节点默认勾选的按钮（与后端 DEFAULT_OPERATIONS 保持一致）。 */
+export const FLOW_DEFAULT_OPERATIONS: string[] = FLOW_TASK_OPERATIONS.map(
+  (item) => item.value,
+);

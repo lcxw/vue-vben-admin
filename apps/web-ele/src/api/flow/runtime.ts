@@ -14,11 +14,14 @@ import type {
   FlowDelegateVO,
   FlowMonitorVO,
   FlowOrderReq,
+  FlowRankingRow,
   FlowStartReq,
+  FlowStatisticsVO,
   FlowTaskActionReq,
   FlowTaskCommentVO,
   FlowTaskQuery,
   FlowTaskVO,
+  FlowTrendRow,
   FlowWorkOrderVO,
 } from './types';
 
@@ -157,6 +160,18 @@ export function setFlowVariables(
   return requestClient.post<unknown>(`${RUNTIME}/setVariables`, req);
 }
 
+/**
+ * 删除流程实例（仅终态实例可删；逻辑删除 + 级联清理运行表）。
+ * 前端必须二次确认后再调用，见 FLOW_RUNTIME_PERM.runtime.delete。
+ */
+export function deleteFlowInstance(
+  workOrderId: string,
+  reason?: string,
+): Promise<unknown> {
+  const req: FlowOrderReq = { reason, workOrderId };
+  return requestClient.post<unknown>(`${RUNTIME}/deleteInstance`, req);
+}
+
 // ---------------- 办理动作 ----------------
 
 /** 统一动作入口：同意/驳回/退回/拿回/转办/加签/抄送/认领等。 */
@@ -191,9 +206,24 @@ export function getFlowHistory(
 
 export function getFlowStatistics(
   params?: FlowOrderReq,
-): Promise<Record<string, unknown>> {
-  return requestClient.post<Record<string, unknown>>(
+): Promise<FlowStatisticsVO> {
+  return requestClient.post<FlowStatisticsVO>(
     `${MONITOR}/statistics`,
+    params ?? {},
+  );
+}
+
+/** 发起 / 完成趋势（day / week / month 分桶）。 */
+export function getFlowTrend(params?: FlowOrderReq): Promise<FlowTrendRow[]> {
+  return requestClient.post<FlowTrendRow[]>(`${MONITOR}/trend`, params ?? {});
+}
+
+/** 流程定义排行：实例数 / 完成率 / 平均耗时。 */
+export function getFlowRanking(
+  params?: FlowOrderReq,
+): Promise<FlowRankingRow[]> {
+  return requestClient.post<FlowRankingRow[]>(
+    `${MONITOR}/ranking`,
     params ?? {},
   );
 }
