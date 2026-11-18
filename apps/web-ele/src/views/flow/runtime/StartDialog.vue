@@ -12,6 +12,9 @@ import type {
   FlowStartReq,
   FlowTaskExtVO,
 } from '#/api/flow';
+import type { OnlineRenderVO } from '#/api/online';
+
+import { renderFlowStartForm, saveOnlineData } from '#/api/online';
 
 import { computed, reactive, ref, watch } from 'vue';
 
@@ -35,6 +38,7 @@ import {
   startFlow,
 } from '#/api/flow';
 
+import OnlineFormRenderer from '../../online/form/OnlineFormRenderer.vue';
 import FlowIdentityPicker from '../shared/FlowIdentityPicker.vue';
 
 const props = defineProps<{ modelValue: boolean }>();
@@ -57,6 +61,13 @@ const PLACEHOLDER_VARS = '例如 {"days": 3}';
 
 const entries = ref<FlowEntryVO[]>([]);
 const nodeOptions = ref<FlowTaskExtVO[]>([]);
+/** 绑定在线表单时的渲染模型；null 表示走既有裸 JSON 输入 */
+const onlineRender = ref<null | OnlineRenderVO>(null);
+const onlineData = ref<Record<string, unknown>>({});
+const entryHasOnlineForm = computed(() => {
+  const entry = entries.value.find((item) => item.entryId === form.entryId);
+  return entry?.bindFormType === 0 && Boolean(entry.defaultFormId);
+});
 const assigneeHints = ref<Record<string, string[]>>({});
 const hintNames = ref<Record<string, FlowIdentityVO[]>>({});
 const pickerVisible = ref(false);
@@ -85,6 +96,8 @@ watch(
     assigneeHints.value = {};
     hintNames.value = {};
     nodeOptions.value = [];
+    onlineRender.value = null;
+    onlineData.value = {};
     try {
       entries.value = await getStartableFlowList();
     } catch (error) {
@@ -112,8 +125,21 @@ async function loadNodes(entryId: string) {
 
 watch(
   () => form.entryId,
-  (entryId) => {
-    if (entryId) void loadNodes(entryId);
+  async (entryId) => {
+    onlineRender.value = null;
+    onlineData.value = {};
+    if (!entryId) return;
+    void loadNodes(entryId);
+    const entry = entries.value.find((item) => item.entryId === entryId);
+    // bindFormType=0 表示在线表单；未绑定或接口报错时静默回退到 JSON 输入
+    if (entry?.bindFormType !== 0 || !entry.defaultFormId) return;
+    try {
+      const render = await renderFlowStartForm({ entryId });
+      onlineRender.value = render;
+      onlineData.value = { ...render.data };
+    } catch (error) {
+      console.warn('[flow] online form not available, fallback to JSON', error);
+    }
   },
 );
 
@@ -164,9 +190,13 @@ async function onSubmit() {
     ElMessage.warning('请选择流程定义');
     return;
   }
-  const formData = parseObject(form.formDataJson, '业务表单');
   const variables = parseObject(form.variablesJson, '流程变量');
-  if (!formData || !variables) return;
+  if (!variables) return;
+  // 绑定在线表单时以渲染器数据为准；否则保留既有 JSON 输入（向后兼容）
+  const formData = onlineRender.value
+    ? { ...onlineData.value }
+    : parseObject(form.formDataJson, '业务表单');
+  if (!formData) return;
 
   const req: FlowStartReq = {
     businessKey: form.businessKey || undefined,
@@ -187,7 +217,20 @@ async function onSubmit() {
 
   saving.value = true;
   try {
-    await startFlow(req);
+    const order = await startFlow(req);
+    // 在线表单数据落库（businessKey=工单号），使「表单数据」页可查询、办理可回显。
+    if (onlineRender.value && order?.workOrderId) {
+      try {
+        await saveOnlineData({
+          businessKey: order.workOrderId,
+          data: formData,
+          formId: onlineRender.value.formId,
+        });
+      } catch (persistError) {
+        // 工单已发起成功，落库失败不应回滚发起；仅记录便于排查
+        console.error('[flow] online form data persist failed', persistError);
+      }
+    }
     ElMessage.success(form.draft ? '已暂存待审' : '流程已发起');
     visible.value = false;
     emit('changed');
@@ -230,13 +273,19 @@ async function onSubmit() {
         <ElSwitch v-model="form.draft" />
         <span class="hint">开启后只落工单草稿，不启动流程实例</span>
       </ElFormItem>
-      <ElFormItem label="业务表单 JSON">
+      <ElFormItem v-if="onlineRender" :label="`业务表单 · ${onlineRender.formName}`">
+        <div class="online-form-wrap">
+          <OnlineFormRenderer v-model="onlineData" :render="onlineRender" />
+        </div>
+      </ElFormItem>
+      <ElFormItem v-else label="业务表单 JSON">
         <ElInput
           v-model="form.formDataJson"
           type="textarea"
           :rows="3"
           :placeholder="PLACEHOLDER_FORM"
         />
+        <span v-if="entryHasOnlineForm" class="hint">在线表单配置加载失败，可手填 JSON 或检查表单是否已发布</span>
       </ElFormItem>
       <ElFormItem label="流程变量 JSON">
         <ElInput
@@ -320,5 +369,14 @@ async function onSubmit() {
 
 .hint-nodes .hint {
   margin: 8px 0 0;
+}
+
+.online-form-wrap {
+  width: 100%;
+  max-height: 320px;
+  overflow: auto;
+  padding: 8px 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 4px;
 }
 </style>

@@ -12,6 +12,9 @@ import type {
   FlowTaskActionReq,
   FlowTaskVO,
 } from '#/api/flow';
+import type { OnlineRenderVO } from '#/api/online';
+
+import { renderFlowForm, saveOnlineData } from '#/api/online';
 
 import { computed, reactive, ref, watch } from 'vue';
 
@@ -33,6 +36,7 @@ import {
 } from '#/api/flow';
 
 import { withFeedback } from '../../system/shared/helpers';
+import OnlineFormRenderer from '../../online/form/OnlineFormRenderer.vue';
 import FlowIdentityPicker from '../shared/FlowIdentityPicker.vue';
 
 interface ActionOption {
@@ -61,6 +65,9 @@ const visible = computed({
 });
 
 const saving = ref(false);
+/** 节点/流程绑定的在线表单渲染模型；null 表示该流程无在线表单 */
+const onlineRender = ref<null | OnlineRenderVO>(null);
+const onlineData = ref<Record<string, unknown>>({});
 const pickerVisible = ref(false);
 const pickerMultiple = ref(false);
 const selectedUserNames = ref<FlowIdentityVO[]>([]);
@@ -128,8 +135,23 @@ function onPickerConfirm(rows: FlowIdentityVO[]) {
 
 watch(
   () => props.modelValue,
-  (isOpen) => {
+  async (isOpen) => {
     if (!isOpen) return;
+    onlineRender.value = null;
+    onlineData.value = {};
+    if (props.task?.workOrderId) {
+      try {
+        const render = await renderFlowForm({
+          readOnly: false,
+          taskInstanceId: props.task.id,
+          workOrderId: props.task.workOrderId,
+        });
+        onlineRender.value = render;
+        onlineData.value = { ...render.data };
+      } catch {
+        // 未绑定在线表单的流程保持既有办理体验，不阻断审批
+      }
+    }
     const first =
       props.initialAction ?? actionOptions.value[0]?.value ?? 'APPROVE';
     form.action = actionOptions.value.some((item) => item.value === first)
@@ -169,12 +191,26 @@ async function onSubmit() {
     taskInstanceId: props.task.id,
     workOrderId: props.task.workOrderId,
   };
+  if (onlineRender.value) {
+    req.formData = { ...onlineData.value };
+  }
   if (needUser.value) req.targetUserId = form.targetUserId;
   if (needUsers.value) req.targetUserIds = [...form.targetUserIds];
   if (needNode.value) req.targetNodeId = form.targetNodeId;
 
   saving.value = true;
   const ok = await withFeedback(() => executeFlowAction(req), '办理成功');
+  if (ok && onlineRender.value && props.task?.workOrderId) {
+    try {
+      await saveOnlineData({
+        businessKey: props.task.workOrderId,
+        data: onlineData.value,
+        formId: onlineRender.value.formId,
+      });
+    } catch (persistError) {
+      console.error('[flow] online form data persist failed on task action', persistError);
+    }
+  }
   saving.value = false;
   if (!ok) return;
   visible.value = false;
@@ -192,6 +228,11 @@ async function onSubmit() {
     <ElForm label-width="100px">
       <ElFormItem label="任务节点">
         <ElInput :model-value="task?.taskName ?? ''" disabled />
+      </ElFormItem>
+      <ElFormItem v-if="onlineRender" :label="`业务表单 · ${onlineRender.formName}`">
+        <div class="online-form-wrap">
+          <OnlineFormRenderer v-model="onlineData" :render="onlineRender" />
+        </div>
       </ElFormItem>
       <ElFormItem label="办理动作" required>
         <ElSelect v-model="form.action" style="width: 100%">
@@ -262,5 +303,13 @@ async function onSubmit() {
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
+}
+.online-form-wrap {
+  width: 100%;
+  max-height: 300px;
+  overflow: auto;
+  padding: 8px 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 4px;
 }
 </style>
