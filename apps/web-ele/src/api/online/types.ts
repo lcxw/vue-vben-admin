@@ -119,3 +119,112 @@ export function widgetTypeLabel(type?: string): string {
     ONLINE_WIDGET_TYPES.find((item) => item.value === type)?.label ?? type ?? ''
   );
 }
+
+// ---------------- 本期扩展：数据权限 / 工单 / 数据源 / 脚本 ----------------
+
+export interface OnlineDataPermVO {
+  permId?: string;
+  formId: string;
+  scopeType: number;
+  customUserIds?: string;
+  customDeptIds?: string;
+  enabled?: number;
+  createTime?: string;
+}
+
+export interface OnlineDataPermDTO {
+  formId: string;
+  scopeType: number;
+  customUserIds?: string[];
+  customDeptIds?: string[];
+  enabled?: number;
+}
+
+export const ONLINE_DATA_SCOPES = [
+  { label: '全部数据', value: 0 },
+  { label: '仅本人', value: 1 },
+  { label: '本部门', value: 2 },
+  { label: '本部门及下级', value: 3 },
+  { label: '自定义', value: 4 },
+] as const;
+
+export interface OnlineWorkOrderVO {
+  orderId: string;
+  formId?: string;
+  businessKey?: string;
+  orderCode: string;
+  title?: string;
+  status?: number;
+  payloadJson?: string;
+  createBy?: string;
+  createTime?: string;
+  updateTime?: string;
+}
+
+export interface OnlineDblinkVO {
+  dblinkId?: string;
+  code: string;
+  name: string;
+  dbType?: string;
+  jdbcUrl: string;
+  username?: string;
+  /** 永远返回 ******，留空表示不修改 */
+  password?: string;
+  driverClass?: string;
+  maxRows?: number;
+  queryTimeout?: number;
+  enabled?: number;
+  createTime?: string;
+}
+
+export interface OnlineSqlExecReq {
+  dblinkCode: string;
+  sql: string;
+  params?: unknown[];
+  maxRows?: number;
+}
+
+export interface OnlineSqlResult {
+  success: boolean;
+  rows: Record<string, unknown>[];
+  rowCount: number;
+  durationMs: number;
+  errorMsg?: string;
+}
+
+export interface OnlineSqlAuditVO {
+  auditId: string;
+  dblinkCode?: string;
+  sql?: string;
+  paramsJson?: string;
+  rowCount?: number;
+  durationMs?: number;
+  success?: number;
+  errorMsg?: string;
+  createBy?: string;
+  createTime?: string;
+}
+
+export interface OnlineScriptVO {
+  scriptId?: string;
+  code: string;
+  name: string;
+  groupCode?: string;
+  content: string;
+  paramsJson?: string;
+  enabled?: number;
+  remark?: string;
+  createTime?: string;
+}
+
+export interface OnlineScriptLogVO {
+  logId: string;
+  scriptCode?: string;
+  scriptName?: string;
+  paramsJson?: string;
+  resultJson?: string;
+  durationMs?: number;
+  success?: number;
+  errorMsg?: string;
+  createTime?: string;
+}

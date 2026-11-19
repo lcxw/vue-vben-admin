@@ -35,6 +35,30 @@ const routes: RouteRecordRaw[] = [
         path: 'dict',
         component: () => import('#/views/online/dict/index.vue'),
       },
+      {
+        meta: { icon: 'lucide:receipt', title: '工单管理' },
+        name: 'OnlineWorkOrder',
+        path: 'order',
+        component: () => import('#/views/online/order/index.vue'),
+      },
+      {
+        meta: { icon: 'lucide:database-zap', title: '数据源管理' },
+        name: 'OnlineDblink',
+        path: 'dblink',
+        component: () => import('#/views/online/dblink/index.vue'),
+      },
+      {
+        meta: { icon: 'lucide:code', title: '脚本管理' },
+        name: 'OnlineScript',
+        path: 'script',
+        component: () => import('#/views/online/script/index.vue'),
+      },
+      {
+        meta: { icon: 'lucide:network', title: '模型建模' },
+        name: 'OnlineModeler',
+        path: 'modeler',
+        component: () => import('#/views/online/modeler/index.vue'),
+      },
     ],
   },
 ];

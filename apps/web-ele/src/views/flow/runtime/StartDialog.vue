@@ -14,7 +14,7 @@ import type {
 } from '#/api/flow';
 import type { OnlineRenderVO } from '#/api/online';
 
-import { renderFlowStartForm, saveOnlineData } from '#/api/online';
+import { renderFlowStartForm } from '#/api/online';
 
 import { computed, reactive, ref, watch } from 'vue';
 
@@ -203,6 +203,7 @@ async function onSubmit() {
     draft: form.draft,
     entryId: form.entryId,
     formData,
+    formId: onlineRender.value?.formId,
     title: form.title || undefined,
     variables,
   };
@@ -217,20 +218,9 @@ async function onSubmit() {
 
   saving.value = true;
   try {
-    const order = await startFlow(req);
-    // 在线表单数据落库（businessKey=工单号），使「表单数据」页可查询、办理可回显。
-    if (onlineRender.value && order?.workOrderId) {
-      try {
-        await saveOnlineData({
-          businessKey: order.workOrderId,
-          data: formData,
-          formId: onlineRender.value.formId,
-        });
-      } catch (persistError) {
-        // 工单已发起成功，落库失败不应回滚发起；仅记录便于排查
-        console.error('[flow] online form data persist failed', persistError);
-      }
-    }
+    await startFlow(req);
+    // 在线表单数据由后端在发起事务内落库（businessKey=工单号），
+    // 避免前端二次调用失败造成「工单有了、表单数据没有」的不一致。
     ElMessage.success(form.draft ? '已暂存待审' : '流程已发起');
     visible.value = false;
     emit('changed');

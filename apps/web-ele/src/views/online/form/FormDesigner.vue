@@ -68,6 +68,9 @@ watch(
     }
     selectedIndex.value = widgets.value.length > 0 ? 0 : -1;
   },
+  // 关键：组件是 v-if + modelValue=true 挂载的，watch 默认不触发首次加载，
+  // 导致已保存的 widget_json 读不回来、保存按钮永久禁用。必须 immediate。
+  { immediate: true },
 );
 
 function addWidget() {

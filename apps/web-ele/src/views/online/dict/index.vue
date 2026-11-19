@@ -100,7 +100,7 @@ function resetForm(row?: OnlineDictVO) {
     dictCode: row?.dictCode ?? '',
     dictId: row?.dictId,
     dictName: row?.dictName ?? '',
-    optionsText: row?.dataJson ?? '[]',
+    dataJson: row?.dataJson ?? '[]',
     remark: row?.remark ?? '',
   });
   formRef.value?.clearValidate();

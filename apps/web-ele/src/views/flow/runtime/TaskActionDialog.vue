@@ -14,7 +14,7 @@ import type {
 } from '#/api/flow';
 import type { OnlineRenderVO } from '#/api/online';
 
-import { renderFlowForm, saveOnlineData } from '#/api/online';
+import { renderFlowForm } from '#/api/online';
 
 import { computed, reactive, ref, watch } from 'vue';
 
@@ -193,6 +193,7 @@ async function onSubmit() {
   };
   if (onlineRender.value) {
     req.formData = { ...onlineData.value };
+    req.formId = onlineRender.value.formId;
   }
   if (needUser.value) req.targetUserId = form.targetUserId;
   if (needUsers.value) req.targetUserIds = [...form.targetUserIds];
@@ -200,17 +201,6 @@ async function onSubmit() {
 
   saving.value = true;
   const ok = await withFeedback(() => executeFlowAction(req), '办理成功');
-  if (ok && onlineRender.value && props.task?.workOrderId) {
-    try {
-      await saveOnlineData({
-        businessKey: props.task.workOrderId,
-        data: onlineData.value,
-        formId: onlineRender.value.formId,
-      });
-    } catch (persistError) {
-      console.error('[flow] online form data persist failed on task action', persistError);
-    }
-  }
   saving.value = false;
   if (!ok) return;
   visible.value = false;

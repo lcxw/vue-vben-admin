@@ -64,11 +64,11 @@ const [Grid, gridApi] = useVbenVxeGrid({
     height: 'auto',
     proxyConfig: {
       ajax: {
-        query: async ({ form }) =>
+        query: async ({ page }, formValues: Partial<{ formId: string }>) =>
           await getOnlineDataPage({
-            formId: form.formId || undefined,
-            pageNum: 1,
-            pageSize: 50,
+            formId: formValues?.formId || undefined,
+            pageNum: page?.currentPage ?? 1,
+            pageSize: page?.pageSize ?? 50,
           }),
       },
     },
@@ -80,6 +80,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
 onMounted(async () => {
   try {
     forms.value = await getOnlineFormList();
+    // 关键：把已加载的表单写回 Select 的 options，否则搜索下拉永远为空
+    const selectSchema = searchSchema[0];
+    if (selectSchema && 'componentProps' in selectSchema) {
+      (selectSchema.componentProps as { options: { label: string; value: string }[] }).options =
+        forms.value.map((f) => ({ label: f.formName, value: f.formId }));
+    }
+    gridApi.formApi?.updateSchema(searchSchema);
     await gridApi.query();
   } catch {
     // 列表接口失败时保持空，由 request 拦截器统一提示

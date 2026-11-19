@@ -504,6 +504,8 @@ export interface FlowOrderReq {
 export interface FlowStartReq {
   assigneeHints?: Record<string, unknown>;
   businessKey?: string;
+  /** 在线表单 Id（绑定在线表单时由发起弹窗填入，后端同事务落库） */
+  formId?: string;
   draft?: boolean;
   entryId?: string;
   entryPublishId?: string;
@@ -515,6 +517,7 @@ export interface FlowStartReq {
 export interface FlowTaskActionReq {
   action: string;
   attachmentJson?: string;
+  formId?: string;
   comment?: string;
   formData?: Record<string, unknown>;
   signType?: string;

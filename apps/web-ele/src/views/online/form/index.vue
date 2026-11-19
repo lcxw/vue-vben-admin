@@ -2,7 +2,7 @@
 /** 在线表单管理：列表 / 新增编辑 / 可视化设计 / 发布 / 克隆 / 删除。 */
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
-import type { OnlineFormDTO, OnlineFormVO } from '#/api/online';
+import type { OnlineFormDTO, OnlineFormVO, OnlineDataPermVO } from '#/api/online';
 
 import { reactive, ref } from 'vue';
 
@@ -14,6 +14,9 @@ import {
   ElForm,
   ElFormItem,
   ElInput,
+  ElMessage,
+  ElOption,
+  ElSelect,
 } from 'element-plus';
 
 import type { FormInstance, FormRules } from 'element-plus';
@@ -23,8 +26,11 @@ import {
   cloneOnlineForm,
   createOnlineForm,
   deleteOnlineForm,
+  getOnlineDataPerm,
   getOnlineFormPage,
+  ONLINE_DATA_SCOPES,
   publishOnlineForm,
+  saveOnlineDataPerm,
   updateOnlineForm,
 } from '#/api/online';
 
@@ -44,6 +50,8 @@ const saving = ref(false);
 const editing = ref<null | OnlineFormVO>(null);
 const designing = ref<null | OnlineFormVO>(null);
 const previewing = ref<null | OnlineFormVO>(null);
+const permVisible = ref(false);
+const permForm = reactive({ formId: '', scopeType: 0, customUserIds: '', customDeptIds: '', enabled: 1 });
 const formRef = ref<FormInstance>();
 const form = reactive<OnlineFormDTO>({
   formCode: '',
@@ -87,11 +95,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
     height: 'auto',
     proxyConfig: {
       ajax: {
-        query: async ({ form }) => await getOnlineFormPage({
-          keyword: form.keyword ?? '',
-          pageNum: 1,
-          pageSize: 50,
-        }),
+        query: async ({ page }, formValues: Partial<{ keyword: string }>) =>
+          await getOnlineFormPage({
+            keyword: formValues?.keyword ?? '',
+            pageNum: page?.currentPage ?? 1,
+            pageSize: page?.pageSize ?? 50,
+          }),
       },
     },
     rowConfig: { keyField: 'formId' },
@@ -177,6 +186,38 @@ async function onDelete(row: OnlineFormVO) {
   if (ok) await gridApi.query();
 }
 
+async function openPerm(row: OnlineFormVO) {
+  const current: null | OnlineDataPermVO = await getOnlineDataPerm(row.formId);
+  Object.assign(permForm, {
+    formId: row.formId,
+    scopeType: current?.scopeType ?? 0,
+    customUserIds: current?.customUserIds ?? '[]',
+    customDeptIds: current?.customDeptIds ?? '[]',
+    enabled: current?.enabled ?? 1,
+  });
+  permVisible.value = true;
+}
+
+async function onPermSave() {
+  let users: string[];
+  let depts: string[];
+  try {
+    users = JSON.parse(permForm.customUserIds || '[]') as string[];
+    depts = JSON.parse(permForm.customDeptIds || '[]') as string[];
+  } catch {
+    ElMessage.warning('自定义用户/部门必须是 JSON 数组字符串');
+    return;
+  }
+  const ok = await withFeedback(() => saveOnlineDataPerm({
+    customDeptIds: depts,
+    customUserIds: users,
+    enabled: permForm.enabled,
+    formId: permForm.formId,
+    scopeType: permForm.scopeType,
+  }));
+  if (ok) permVisible.value = false;
+}
+
 function renderPreview(): null | import('#/api/online').OnlineRenderVO {
   return previewing.value
     ? {
@@ -207,6 +248,7 @@ function renderPreview(): null | import('#/api/online').OnlineRenderVO {
           设计
         </ElButton>
         <ElButton link size="small" @click="openPreview(row)">预览</ElButton>
+        <ElButton v-if="has('online:perm:save')" link type="warning" size="small" @click="openPerm(row)">数据权限</ElButton>
         <ElButton v-if="has('online:form:publish')" link type="success" size="small" @click="onPublish(row)">
           发布
         </ElButton>
@@ -262,4 +304,31 @@ function renderPreview(): null | import('#/api/online').OnlineRenderVO {
       />
     </ElDrawer>
   </Page>
+    <ElDrawer v-model="permVisible" title="数据权限配置" size="480px">
+      <ElForm label-position="top">
+        <ElFormItem label="可见范围">
+          <ElSelect v-model="permForm.scopeType">
+            <ElOption
+              v-for="scope in ONLINE_DATA_SCOPES"
+              :key="scope.value"
+              :label="scope.label"
+              :value="scope.value"
+            />
+          </ElSelect>
+        </ElFormItem>
+        <template v-if="permForm.scopeType === 4">
+          <ElFormItem label="自定义用户 Id（JSON 数组）">
+            <ElInput v-model="permForm.customUserIds" type="textarea" :rows="2" />
+          </ElFormItem>
+          <ElFormItem label="自定义部门 Id（JSON 数组）">
+            <ElInput v-model="permForm.customDeptIds" type="textarea" :rows="2" />
+          </ElFormItem>
+        </template>
+      </ElForm>
+      <template #footer>
+        <ElButton @click="permVisible = false">取消</ElButton>
+        <ElButton type="primary" @click="onPermSave">保存权限</ElButton>
+      </template>
+    </ElDrawer>
+
 </template>
