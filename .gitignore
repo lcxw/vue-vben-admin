@@ -3,11 +3,13 @@ node_modules
 dist
 dist-ssr
 dist.zip
+dist-*
 dist.tar
 dist.war
 .nitro
 .output
 *-dist.zip
+dist-*
 *-dist.tar
 *-dist.war
 coverage

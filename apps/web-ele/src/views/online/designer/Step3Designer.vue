@@ -12,6 +12,12 @@ import { computed, nextTick, onMounted, ref } from 'vue';
 // sortablejs 无类型声明（项目已装 @types/sortablejs 但此导入路径未解析到），用忽略抑制
 // @ts-expect-error sortablejs 类型声明缺失
 import Sortable from 'sortablejs';
+type SortableEvent = {
+  item: HTMLElement & { dataset: Record<string, string>; remove(): void };
+  oldIndex?: number | null;
+  newIndex?: number | null;
+  to?: HTMLElement;
+};
 
 import {
   ElButton,
@@ -58,7 +64,9 @@ const generating = ref(false);
 const previewConfig = ref<null | Awaited<ReturnType<typeof getRunConfig>>>(null);
 
 const canvasEl = ref<HTMLElement | null>(null);
+const paletteEl = ref<HTMLElement | null>(null);
 let sortable: Sortable | null = null;
+let paletteSortable: Sortable | null = null;
 
 const selected = computed<null | Widget>(() =>
   selectedIndex.value >= 0 ? (widgets.value[selectedIndex.value] ?? null) : null,
@@ -66,7 +74,7 @@ const selected = computed<null | Widget>(() =>
 
 /** 控件池：已导入表字段（转成控件） + 基础控件 + 容器。 */
 const palette = computed(() => {
-  const items: Array<{ type: string; title: string; field: string; fromTable?: string }> = [];
+  const items: Array<{ type: string; title: string; field: string; dictCode?: string; fromTable?: string }> = [];
   for (const t of props.page?.tables ?? []) {
     for (const c of t.columns) {
       if (c.isPk === 1) continue;
@@ -74,6 +82,7 @@ const palette = computed(() => {
         type: c.widgetType ?? 'input',
         title: c.columnComment || c.columnName,
         field: c.columnName,
+        dictCode: c.dictCode || undefined,
         fromTable: t.tableName,
       });
     }
@@ -128,17 +137,18 @@ async function loadWidget() {
   initSortable();
 }
 
-function makeWidget(item: { type: string; title: string; field: string }): Widget {
-  const dict = dicts.value.find((d) => d.dictCode === fieldToDict(item.field));
+function makeWidget(item: { type: string; title: string; field: string; dictCode?: string }): Widget {
+  const dict = item.dictCode ? dicts.value.find((d) => d.dictCode === item.dictCode) : undefined;
+  const dictCode = dict?.dictCode ?? fieldToDict(item.field);
   return {
     type: item.type,
     field: item.field,
     title: item.title,
     key: item.field + '_' + Date.now().toString().slice(-5),
     span: 12,
-    props: { placeholder: '请输入' + item.title, ...(dict ? { dictInfo: { dictCode: dict.dictCode } } : {}) },
+    props: { placeholder: '请输入' + item.title, ...(dictCode ? { dictInfo: { dictCode } } : {}) },
     childWidgetList: [],
-    dictCode: dict?.dictCode,
+    dictCode,
   };
 }
 
@@ -181,24 +191,92 @@ function initSortable() {
     animation: 180,
     ghostClass: 'wz-ghost',
     chosenClass: 'wz-chosen',
+    group: 'designerWidgets',
     handle: '.wz-drag-handle',
-    onEnd(evt: { oldIndex?: number | null; newIndex?: number | null }) {
+    onAdd(evt: SortableEvent) {
+      // 从控件池拖入：按 data 属性生成 widget 插入到落点，DOM 项交还 Vue 渲染
+      const el = evt.item as HTMLElement;
+      const type = el.dataset.widgetType;
+      if (!type) { evt.item.remove(); return; }
+      const w = makeWidget({
+        type,
+        title: el.dataset.title ?? type,
+        field: el.dataset.field ?? type,
+        dictCode: el.dataset.dictCode || undefined,
+      });
+      widgets.value.splice(evt.newIndex ?? widgets.value.length, 0, w);
+      evt.item.remove();
+      selectedIndex.value = evt.newIndex ?? widgets.value.length - 1;
+    },
+    onEnd(evt: SortableEvent) {
       const { oldIndex, newIndex } = evt;
       if (oldIndex == null || newIndex == null || oldIndex === newIndex) return;
+      if (oldIndex >= widgets.value.length) return;
       const [moved] = widgets.value.splice(oldIndex, 1);
       if (moved) widgets.value.splice(newIndex, 0, moved);
       selectedIndex.value = newIndex;
     },
   });
+  // 控件池：可拖出（clone），不可排序/放入
+  const paletteList = paletteEl.value?.querySelector('.palette-list') as HTMLElement | null;
+  if (paletteList) {
+    paletteSortable?.destroy();
+    paletteSortable = Sortable.create(paletteList, {
+      group: { name: 'designerWidgets', pull: 'clone', put: false },
+      sort: false,
+      ghostClass: 'pi-ghost',
+    });
+  }
 }
 
 async function onSave() {
   if (!activeFormId.value) { ElMessage.warning('请先选择表单'); return; }
+  const currentForm = forms.value.find((f) => f.formId === activeFormId.value);
+  const isQueryForm = currentForm?.pageRole === 'query';
+  const editForm = forms.value.find((f) => f.pageRole === 'edit');
+
+  // 查询表单：生成 tableWidget（列表列 + 操作，操作指向编辑表单 → 橙单跳页/行操作模型）
+  let tableWidget: Record<string, unknown> | undefined;
+  if (isQueryForm) {
+    const listCols = widgets.value
+      .filter((w) => w.field && w.type !== 'divider')
+      .map((w) => ({
+        fieldKey: w.field, column: w.field, label: w.title,
+        widgetType: w.type, dictCode: w.dictCode, isList: true,
+      }));
+    tableWidget = {
+      tableId: props.page.masterTableId,
+      tableColumnList: listCols,
+      paged: true,
+      pageSize: 10,
+      operationList: [
+        ...editForm ? [{
+          type: 0, name: '新建', formId: editForm.formId, rowOperation: false,
+          enabled: true, btnType: 'primary', showOrder: 1,
+        }] : [],
+        ...editForm ? [{
+          type: 1, name: '编辑', formId: editForm.formId, rowOperation: true,
+          enabled: true, btnType: 'primary', showOrder: 2,
+        }] : [],
+        {
+          type: 2, name: '删除', rowOperation: true,
+          enabled: true, btnType: 'danger', showOrder: 3,
+        },
+      ],
+    };
+    // 缓存查询↔编辑表单映射，供运行时组件解析跳转目标
+    if (editForm) sessionStorage.setItem(`editForm_${activeFormId.value}`, editForm.formId);
+    if (editForm) sessionStorage.setItem(`backForm_${editForm.formId}`, activeFormId.value);
+  }
+
   const tree = {
     formKey: 'page_' + props.page.pageId + '_' + activeFormId.value,
     labelWidth: '110px',
     size: 'default',
-    pc: { widgetList: widgets.value },
+    pc: {
+      widgetList: widgets.value,
+      ...(tableWidget ? { tableWidget } : {}),
+    },
   };
   const ok = await callWithFeedback(
     () => saveWizardWidget(activeFormId.value, JSON.stringify(tree, null, 2)),
@@ -259,7 +337,16 @@ async function onNext() {
         <div class="panel-title">字段 / 控件池</div>
         <div class="panel-sub">来自已导入表（{{ palette.length }}）</div>
         <div class="palette-list">
-          <div v-for="(item, i) in palette" :key="i" class="palette-item" @click="addFromPalette(item)">
+          <div
+            v-for="(item, i) in palette"
+            :key="i"
+            class="palette-item"
+            :data-widget-type="item.type"
+            :data-title="item.title"
+            :data-field="item.field"
+            :data-dict-code="item.dictCode ?? ''"
+            @click="addFromPalette(item)"
+          >
             <span class="pi-icon">＋</span>
             <span class="pi-label">{{ item.title }}</span>
             <span class="pi-field">{{ item.field }}</span>

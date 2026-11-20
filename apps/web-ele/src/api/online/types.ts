@@ -465,3 +465,72 @@ export const WIZARD_PAGE_TYPES = [
   { label: '统计页面', value: 5 },
   { label: '流程页面', value: 10 },
 ] as const;
+
+// ==================== v3 表单运行时聚合（唯一运行时组件） ====================
+
+export interface FormOperation {
+  type: number; // 0新建 1编辑 2删除 10批量删除 30保存 31取消
+  name: string;
+  formId?: string;
+  rowOperation?: boolean;
+  enabled?: boolean;
+  btnType?: string;
+  btnClass?: string;
+  showOrder?: number;
+}
+
+export interface FormDesignTableWidget {
+  tableId?: string;
+  datasourceId?: string;
+  relationId?: string;
+  tableColumnList: FormFieldModel[];
+  operationList: FormOperation[];
+  paged?: boolean;
+  pageSize?: number;
+}
+
+export interface FormSubTable {
+  edgeId: string;
+  title: string;
+  tableId?: string;
+  tableName?: string;
+  /** 从表外键列（edge.toColumn） */
+  fkColumn: string;
+  /** 主表关联列（edge.fromColumn） */
+  masterColumn?: string;
+  /** 从表行编辑弹窗表单 Id */
+  dialogFormId?: string;
+  columns: FormFieldModel[];
+}
+
+export interface FormDesignTree {
+  formKey?: string;
+  labelWidth?: string;
+  size?: string;
+  widgetList: FormFieldModel[];
+  tableWidget?: FormDesignTableWidget;
+  operationList: FormOperation[];
+  /** 主子表编辑：render 从 ONE_TO_MANY 关系边自动推导（零配置） */
+  subTables?: FormSubTable[];
+}
+
+export interface FormRenderVo {
+  formId: string;
+  formCode?: string;
+  formName: string;
+  /** 1查询 2高级查询 3一对一选择 4多标签 5编辑 10流程 11工单 */
+  formType: number;
+  formKind: number;
+  masterTable?: string;
+  pkColumn?: string;
+  dblinkCode?: string;
+  version?: number;
+  design: FormDesignTree;
+  tableMap: Record<string, Record<string, unknown>>;
+  columnMap: Record<string, Record<string, unknown>>;
+  dicts: Record<string, Array<{ label: string; value: string | number }>>;
+  relations: Array<Record<string, unknown>>;
+  /** 同页面下的其它表单（查询表单操作解析编辑表单用） */
+  forms: Array<{ formId: string; formCode?: string; formName: string; pageRole?: string; viewType?: number; formKind?: number }>;
+  runtimeBase: string;
+}
