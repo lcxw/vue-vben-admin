@@ -383,3 +383,85 @@ export const ONLINE_FILTER_TYPES = [
   { label: '大于', value: 5 },
   { label: '小于', value: 6 },
 ] as const;
+
+// ==================== 页面设计工作台 v2（pageId 主线向导） ====================
+
+export interface WizardColumn {
+  columnModelId: string;
+  columnName: string;
+  columnComment?: string;
+  dataType?: string;
+  widgetType?: string;
+  dictCode?: string;
+  isPk?: number;
+  isQuery?: number;
+  isList?: number;
+  isForm?: number;
+  filterType?: number;
+  showOrder?: number;
+}
+
+export interface WizardTable {
+  tableModelId: string;
+  tableName: string;
+  tableComment?: string;
+  primaryKey?: string;
+  logicDeleteCol?: string;
+  isMaster?: number;
+  columns: WizardColumn[];
+}
+
+export interface WizardRelation {
+  edgeId: string;
+  edgeName?: string;
+  fromTableId: string;
+  fromColumn: string;
+  toTableId: string;
+  toColumn: string;
+  cardinality?: string;
+  joinType?: string;
+  showOrder?: number;
+}
+
+export interface WizardForm {
+  formId: string;
+  formCode?: string;
+  formName: string;
+  pageRole?: string;
+  viewType?: number;
+  storageType?: number;
+  status?: number;
+}
+
+export interface PageVo {
+  pageId: string;
+  pageCode: string;
+  pageName: string;
+  /** 0-基础信息 1-数据模型 2-设计表单 */
+  status: number;
+  /** 1-业务 5-统计 10-流程 */
+  pageType: number;
+  published: number;
+  dblinkCode?: string;
+  masterTableId?: string;
+  categoryId?: string;
+  layoutJson?: string;
+  remark?: string;
+  createTime?: string;
+  tabs?: unknown[];
+  tables: WizardTable[];
+  relations: WizardRelation[];
+  forms: WizardForm[];
+}
+
+export const WIZARD_STEPS = [
+  { label: '基础信息', value: 0 },
+  { label: '数据模型', value: 1 },
+  { label: '设计表单', value: 2 },
+  { label: '发布运行', value: 3 },
+] as const;
+export const WIZARD_PAGE_TYPES = [
+  { label: '业务页面', value: 1 },
+  { label: '统计页面', value: 5 },
+  { label: '流程页面', value: 10 },
+] as const;

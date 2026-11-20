@@ -1,0 +1,1 @@
+import"./rolldown-runtime-hePW80VL.js";import{t as e}from"./asyncToGenerator-BVcl5FgL.js";import{t}from"./css-CssMgKN2.js";function n(e){return r.apply(this,arguments)}function r(){return r=e(function*(e,n=`操作成功`){try{let r=yield e();return n&&t.success(n),r}catch(e){var r;return t.error((r=e==null?void 0:e.message)==null?`操作失败`:r),null}}),r.apply(this,arguments)}export{n as t};

@@ -1,0 +1,1 @@
+import{b as e}from"./install-BUKk4mCc.js";import{a as t,o as n,s as r}from"./use-aria-CQXEE4hE.js";import{g as i}from"./_Uint8Array-DgZqiIsj.js";function a(e,i){return n(t(e,i,r),e+``)}function o(t){return e(t)&&i(t)}export{a as n,o as t};

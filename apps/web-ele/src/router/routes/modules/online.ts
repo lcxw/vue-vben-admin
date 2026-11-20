@@ -18,6 +18,12 @@ const routes: RouteRecordRaw[] = [
     path: '/online',
     children: [
       {
+        meta: { icon: 'lucide:workflow', title: '页面设计' },
+        name: 'OnlineDesigner',
+        path: 'designer',
+        component: () => import('#/views/online/designer/index.vue'),
+      },
+      {
         meta: { icon: 'lucide:forms', title: '表单管理' },
         name: 'OnlineForm',
         path: 'form',

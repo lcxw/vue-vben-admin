@@ -8,3 +8,4 @@ export * from './script';
 export * from './types';
 export * from './modeler';
 export * from './modeling';
+export * from './wizard';
