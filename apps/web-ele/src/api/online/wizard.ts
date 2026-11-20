@@ -76,3 +76,8 @@ export function renderFormRuntime(formId: string): Promise<import('./types').For
 export function publishFormMenu(pageId: string, entryFormId?: string): Promise<{ menuId: string }> {
   return requestClient.post<{ menuId: string }>(`${BASE}/publishMenu`, { pageId, entryFormId });
 }
+
+/** 统计聚合（统计表单 viewType=6 的图表数据） */
+export function aggregateOnlineForm(formId: string): Promise<import('./types').AggregateChart[]> {
+  return requestClient.post<import('./types').AggregateChart[]>(`${BASE}/aggregate`, { formId });
+}
