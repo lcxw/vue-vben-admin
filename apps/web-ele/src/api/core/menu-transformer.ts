@@ -24,6 +24,12 @@ interface PermissionVO {
   sortable?: number;
   type?: string;
   view?: string;
+  /** 菜单绑定类型：0-普通路由 1-在线表单页面（低代码） */
+  bindType?: number;
+  /** 绑定的在线表单 Id（bindType=1 时） */
+  onlineFormId?: string;
+  /** 扩展 JSON */
+  extraData?: string;
 }
 
 function isButtonType(p: PermissionVO): boolean {
@@ -60,7 +66,8 @@ function toRouteRecord(p: PermissionVO): null | RouteRecordStringComponent {
     : undefined;
 
   const openType = p.openType ?? '';
-  const path = p.path ?? '';
+  let path = p.path ?? '';
+  let component = p.component ?? p.view ?? '';
   const isIframe =
     p.type === '1' || openType === '_iframe' || Boolean(p.view && !p.component);
   const externalFromOpenType = /^https?:\/\//i.test(openType);
@@ -74,6 +81,14 @@ function toRouteRecord(p: PermissionVO): null | RouteRecordStringComponent {
 
   if (p.icon) {
     meta.icon = p.icon;
+  }
+  // 在线表单菜单（低代码页面）：透传绑定信息，供路由守卫/运行时组件使用
+  if (p.bindType === 1 && p.onlineFormId) {
+    meta.bindType = 1;
+    meta.onlineFormId = p.onlineFormId;
+    // 运行时路由固定指向通用组件 OnlineFormRun，formId 走 query
+    component = '/online/run/OnlineFormRun.vue';
+    path = `run/${p.onlineFormId}`;
   }
   if (p.enabled === false) {
     meta.menuVisibleWithForbidden = true;
@@ -90,7 +105,7 @@ function toRouteRecord(p: PermissionVO): null | RouteRecordStringComponent {
 
   return {
     children,
-    component: isIframe ? 'IFrameView' : (p.component ?? p.view ?? ''),
+    component: isIframe ? 'IFrameView' : component,
     meta,
     name: p.name || p.id,
     path,

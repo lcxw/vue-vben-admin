@@ -33,6 +33,8 @@ const onlinePageImports: ComponentRecordType = {
   '/online/dblink/index.vue': () => import('#/views/online/dblink/index.vue'),
   '/online/script/index.vue': () => import('#/views/online/script/index.vue'),
   '/online/modeler/index.vue': () => import('#/views/online/modeler/index.vue'),
+  // 低代码运行时组件（菜单 bind_type=1 的 component 指向这里）
+  '/online/run/OnlineFormRun.vue': () => import('#/views/online/run/OnlineFormRun.vue'),
 };
 
 async function generateAccess(options: GenerateMenuAndRoutesOptions) {

@@ -66,3 +66,13 @@ export function publishWizardPage(pageId: string): Promise<PageVo> {
 export function deleteWizardPage(pageId: string): Promise<unknown> {
   return requestClient.post<unknown>('/online/page/delete', { pageId });
 }
+
+/** v3 运行时聚合配置（唯一运行时组件的数据源） */
+export function renderFormRuntime(formId: string): Promise<import('./types').FormRenderVo> {
+  return requestClient.post<import('./types').FormRenderVo>(`${BASE}/render`, { formId });
+}
+
+/** 发布并绑定在线表单菜单 */
+export function publishFormMenu(pageId: string, entryFormId?: string): Promise<{ menuId: string }> {
+  return requestClient.post<{ menuId: string }>(`${BASE}/publishMenu`, { pageId, entryFormId });
+}
