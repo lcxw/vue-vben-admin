@@ -27,10 +27,18 @@ export interface OnlineFormVO {
   formId: string;
   formCode?: string;
   formName: string;
+  categoryId?: string;
   formType?: number;
+  viewType?: number;
+  formKind?: number;
+  storageType?: number;
   widgetJson?: string;
+  queryJson?: string;
+  fieldJson?: string;
   paramsJson?: string;
   masterTable?: string;
+  pkColumn?: string;
+  dblinkCode?: string;
   status?: number;
   version?: number;
   remark?: string;
@@ -228,3 +236,150 @@ export interface OnlineScriptLogVO {
   errorMsg?: string;
   createTime?: string;
 }
+
+// ==================== 在线表单建模重构（V14+） ====================
+
+/** 字段建模项：同时描述渲染/存储/查询/列表策略 */
+export interface FormFieldModel {
+  fieldKey: string;
+  column?: string;
+  label: string;
+  widgetType: string;
+  dictCode?: string;
+  options?: Array<{ label: string; value: string | number }>;
+  required?: boolean;
+  placeholder?: string;
+  width?: number;
+  defaultValue?: unknown;
+  isQuery?: boolean;
+  filterType?: number;
+  isList?: boolean;
+  isForm?: boolean;
+  showOrder?: number;
+  validationJson?: string;
+  fieldKind?: string;
+}
+
+/** 表单字段模型配置（form.fieldJson） */
+export interface FormFieldSchema {
+  masterTable?: string;
+  pkColumn?: string;
+  dblinkCode?: string;
+  logicDeleteCol?: string;
+  sortCol?: string;
+  fields: FormFieldModel[];
+}
+
+/** 分类树节点 */
+export interface OnlineCategoryVO {
+  categoryId: string;
+  parentId: string;
+  categoryName: string;
+  categoryCode?: string;
+  sortNo?: number;
+  remark?: string;
+  children?: OnlineCategoryVO[];
+}
+export type OnlineCategoryDTO = Partial<OnlineCategoryVO> & Pick<OnlineCategoryVO, 'categoryName'>;
+
+/** 字典项 */
+export interface OnlineDictItemVO {
+  itemId: string;
+  dictCode: string;
+  itemLabel: string;
+  itemValue: string;
+  parentValue?: string;
+  sortNo?: number;
+  status?: number;
+  remark?: string;
+  createTime?: string;
+}
+export type OnlineDictItemDTO = Partial<OnlineDictItemVO> &
+  Pick<OnlineDictItemVO, 'dictCode' | 'itemLabel' | 'itemValue'>;
+
+/** 页面 Tab */
+export interface OnlinePageTabVO {
+  tabId: string;
+  pageId: string;
+  tabName: string;
+  formId: string;
+  formName?: string;
+  viewType?: number;
+  sortNo?: number;
+  enabled?: number;
+}
+export type OnlinePageTabDTO = Partial<OnlinePageTabVO> &
+  Pick<OnlinePageTabVO, 'formId'>;
+
+/** 页面（多 Tab 容器） */
+export interface OnlinePageVO {
+  pageId: string;
+  pageCode: string;
+  pageName: string;
+  categoryId?: string;
+  layoutJson?: string;
+  remark?: string;
+  createTime?: string;
+  tabs: OnlinePageTabVO[];
+}
+export type OnlinePageDTO = Partial<OnlinePageVO> & Pick<OnlinePageVO, 'pageName'>;
+
+/** 运行时表单配置（前端自动渲染的契约核心） */
+export interface FormRuntimeVO {
+  formId: string;
+  formCode?: string;
+  formName: string;
+  viewType: number;
+  formKind: number;
+  storageType: number;
+  masterTable?: string;
+  pkColumn?: string;
+  version?: number;
+  fields: FormFieldModel[];
+  dicts: Record<string, Array<{ label: string; value: string | number; parentValue?: string }>>;
+}
+
+/** 运行时分页结果 */
+export interface RunQueryVO {
+  rows: Array<Record<string, unknown> & { _labels?: Record<string, unknown>; _dataId?: string }>;
+  total: number;
+  pageNum: number;
+  pageSize: number;
+  pkColumn?: string;
+}
+
+/** 数据源表 / 列信息 */
+export interface SchemaTableVO { tableName: string; tableComment?: string }
+export interface SchemaColumnVO {
+  columnName: string;
+  dataType?: string;
+  columnSize?: number;
+  nullable?: boolean;
+  primaryKey?: boolean;
+  columnComment?: string;
+}
+
+/** 视图/形态常量 */
+export const ONLINE_VIEW_TYPES = [
+  { label: '查询表单', value: 1 },
+  { label: '编辑表单', value: 2 },
+  { label: '详情表单', value: 3 },
+  { label: '多Tab页面', value: 4 },
+  { label: '弹窗选择', value: 5 },
+] as const;
+export const ONLINE_FORM_KINDS = [
+  { label: '普通页面', value: 1 },
+  { label: '弹窗', value: 2 },
+] as const;
+export const ONLINE_STORAGE_TYPES = [
+  { label: '物理表', value: 1 },
+  { label: 'JSON文档', value: 0 },
+] as const;
+export const ONLINE_FILTER_TYPES = [
+  { label: '等于', value: 1 },
+  { label: '模糊', value: 2 },
+  { label: '范围', value: 3 },
+  { label: 'IN列表', value: 4 },
+  { label: '大于', value: 5 },
+  { label: '小于', value: 6 },
+] as const;

@@ -1,0 +1,1 @@
+import{r as e}from"./shared.esm-bundler-Cs8P-Eu9.js";var t=(e=``)=>e.replace(/[|\\{}()[\]^$+*?.]/g,`\\$&`).replace(/-/g,`\\x2d`),n=t=>e(t);export{t as n,n as t};

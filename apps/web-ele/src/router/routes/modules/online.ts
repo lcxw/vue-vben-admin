@@ -59,6 +59,24 @@ const routes: RouteRecordRaw[] = [
         path: 'modeler',
         component: () => import('#/views/online/modeler/index.vue'),
       },
+      {
+        meta: { icon: 'lucide:folder-tree', title: '表单分类' },
+        name: 'OnlineCategory',
+        path: 'category',
+        component: () => import('#/views/online/category/index.vue'),
+      },
+      {
+        meta: { icon: 'lucide:layout-panel-top', title: '页面编排' },
+        name: 'OnlinePage',
+        path: 'page',
+        component: () => import('#/views/online/page/index.vue'),
+      },
+      {
+        meta: { icon: 'lucide:table-2', title: '数据工作台' },
+        name: 'OnlineRuntime',
+        path: 'runtime',
+        component: () => import('#/views/online/runtime/index.vue'),
+      },
     ],
   },
 ];

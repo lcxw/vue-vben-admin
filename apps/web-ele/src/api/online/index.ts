@@ -7,3 +7,4 @@ export * from './perm';
 export * from './script';
 export * from './types';
 export * from './modeler';
+export * from './modeling';

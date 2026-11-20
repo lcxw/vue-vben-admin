@@ -1,0 +1,1 @@
+import{l as e}from"./install-BUKk4mCc.js";import{A as t,O as n,b as r,d as i,l as a,p as o,u as s,x as c}from"./icon-D05lwt6p.js";var l=e([String,Object,Function]),u={Close:o},d={Close:o,SuccessFilled:n,InfoFilled:r,WarningFilled:t,CircleCloseFilled:i},f={primary:r,success:n,warning:t,error:i,info:r},p={validating:c,success:a,error:s};export{l as a,p as i,d as n,f as r,u as t};

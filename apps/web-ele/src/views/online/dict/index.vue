@@ -31,9 +31,12 @@ import {
   usePermission,
   withFeedback,
 } from '../../system/shared/helpers';
+import DictItemEditor from './DictItemEditor.vue';
 
 const { has } = usePermission();
 const drawerVisible = ref(false);
+const itemsVisible = ref(false);
+const itemsDict = ref<null | OnlineDictVO>(null);
 const saving = ref(false);
 const editing = ref<null | OnlineDictVO>(null);
 const formRef = ref<FormInstance>();
@@ -159,6 +162,11 @@ async function onSubmit() {
   }
 }
 
+function openItems(row: OnlineDictVO) {
+  itemsDict.value = row;
+  itemsVisible.value = true;
+}
+
 async function onDelete(row: OnlineDictVO) {
   if (!(await confirmAction(`确定删除字典「${row.dictName}」？`))) return;
   const ok = await withFeedback(() => deleteOnlineDict(row.dictId), '已删除');
@@ -173,6 +181,9 @@ async function onDelete(row: OnlineDictVO) {
         {{ optionCount(row) }}
       </template>
       <template #action="{ row }">
+        <ElButton link type="success" size="small" @click="openItems(row)">
+          字典项
+        </ElButton>
         <ElButton v-if="has('online:dict:update')" link type="primary" size="small" @click="openEdit(row)">
           编辑
         </ElButton>
@@ -184,6 +195,13 @@ async function onDelete(row: OnlineDictVO) {
         <ElButton v-if="has('online:dict:add')" type="primary" @click="openCreate">新增字典</ElButton>
       </template>
     </Grid>
+
+    <DictItemEditor
+      v-if="itemsDict"
+      v-model="itemsVisible"
+      :dict-code="itemsDict.dictCode"
+      :dict-name="itemsDict.dictName"
+    />
 
     <ElDrawer
       v-model="drawerVisible"

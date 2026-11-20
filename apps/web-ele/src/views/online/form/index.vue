@@ -2,9 +2,9 @@
 /** 在线表单管理：列表 / 新增编辑 / 可视化设计 / 发布 / 克隆 / 删除。 */
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
-import type { OnlineFormDTO, OnlineFormVO, OnlineDataPermVO } from '#/api/online';
+import type { OnlineFormDTO, OnlineFormVO, OnlineDataPermVO, OnlineCategoryVO, OnlineDblinkVO } from '#/api/online';
 
-import { reactive, ref } from 'vue';
+import { onMounted, reactive, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
@@ -26,9 +26,14 @@ import {
   cloneOnlineForm,
   createOnlineForm,
   deleteOnlineForm,
+  getCategoryTree,
   getOnlineDataPerm,
+  getOnlineDblinkList,
   getOnlineFormPage,
   ONLINE_DATA_SCOPES,
+  ONLINE_FORM_KINDS,
+  ONLINE_STORAGE_TYPES,
+  ONLINE_VIEW_TYPES,
   publishOnlineForm,
   saveOnlineDataPerm,
   updateOnlineForm,
@@ -39,26 +44,38 @@ import {
   usePermission,
   withFeedback,
 } from '../../system/shared/helpers';
+import FieldModelDesigner from './FieldModelDesigner.vue';
 import FormDesigner from './FormDesigner.vue';
 import OnlineFormRenderer from './OnlineFormRenderer.vue';
 
 const { has } = usePermission();
 const drawerVisible = ref(false);
 const designerVisible = ref(false);
+const fieldDesignerVisible = ref(false);
 const previewVisible = ref(false);
 const saving = ref(false);
 const editing = ref<null | OnlineFormVO>(null);
 const designing = ref<null | OnlineFormVO>(null);
+const fieldDesigning = ref<null | OnlineFormVO>(null);
 const previewing = ref<null | OnlineFormVO>(null);
+const categories = ref<OnlineCategoryVO[]>([]);
+const dblinks = ref<OnlineDblinkVO[]>([]);
 const permVisible = ref(false);
 const permForm = reactive({ formId: '', scopeType: 0, customUserIds: '', customDeptIds: '', enabled: 1 });
 const formRef = ref<FormInstance>();
 const form = reactive<OnlineFormDTO>({
   formCode: '',
   formName: '',
+  categoryId: undefined,
+  viewType: 2,
+  formKind: 1,
+  storageType: 1,
   masterTable: '',
+  pkColumn: 'id',
+  dblinkCode: '',
   remark: '',
   widgetJson: '{"widgets":[]}',
+  fieldJson: '{"fields":[]}',
 });
 
 const rules: FormRules = {
@@ -74,22 +91,30 @@ const [Grid, gridApi] = useVbenVxeGrid({
   gridOptions: {
     columns: [
       { field: 'formName', title: '表单名称', minWidth: 180 },
-      { field: 'formCode', title: '表单编码', minWidth: 180 },
+      { field: 'formCode', title: '表单编码', minWidth: 160 },
+      { field: 'categoryId', title: '分类', width: 110, slots: { default: 'category' } },
+      { field: 'viewType', title: '视图类型', width: 100, slots: { default: 'viewType' } },
+      {
+        field: 'storageType',
+        title: '存储',
+        width: 90,
+        slots: { default: 'storageType' },
+      },
       {
         field: 'status',
         title: '状态',
-        width: 100,
+        width: 90,
         slots: { default: 'status' },
       },
-      { field: 'version', title: '版本', width: 80 },
-      { field: 'updateTime', title: '更新时间', width: 170 },
+      { field: 'version', title: '版本', width: 70 },
+      { field: 'updateTime', title: '更新时间', width: 160 },
       {
         align: 'center',
         field: 'operation',
         fixed: 'right',
         slots: { default: 'action' },
         title: '操作',
-        width: 300,
+        width: 380,
       },
     ],
     height: 'auto',
@@ -113,9 +138,16 @@ function resetForm(row?: OnlineFormVO) {
     formCode: row?.formCode ?? '',
     formId: row?.formId,
     formName: row?.formName ?? '',
+    categoryId: row?.categoryId ?? undefined,
+    viewType: row?.viewType ?? 2,
+    formKind: row?.formKind ?? 1,
+    storageType: row?.storageType ?? 1,
     masterTable: row?.masterTable ?? '',
+    pkColumn: row?.pkColumn ?? 'id',
+    dblinkCode: row?.dblinkCode ?? '',
     remark: row?.remark ?? '',
     widgetJson: row?.widgetJson ?? '{"widgets":[]}',
+    fieldJson: row?.fieldJson ?? '{"fields":[]}',
   });
   formRef.value?.clearValidate();
 }
@@ -136,6 +168,44 @@ function openDesigner(row: OnlineFormVO) {
   designing.value = row;
   designerVisible.value = true;
 }
+
+function openFieldDesigner(row: OnlineFormVO) {
+  fieldDesigning.value = row;
+  fieldDesignerVisible.value = true;
+}
+
+async function onFieldDesignerSave(fieldJson: string) {
+  const current = fieldDesigning.value;
+  if (!current) return;
+  const ok = await withFeedback(() =>
+    updateOnlineForm({ formId: current.formId, formName: current.formName, fieldJson }),
+  );
+  if (ok) await gridApi.query();
+}
+
+function viewTypeLabel(v?: number): string {
+  return ONLINE_VIEW_TYPES.find((t) => t.value === v)?.label ?? '编辑表单';
+}
+
+function categoryName(id?: string): string {
+  const walk = (nodes: OnlineCategoryVO[]): string => {
+    for (const n of nodes) {
+      if (n.categoryId === id) return n.categoryName;
+      const sub = n.children ? walk(n.children) : '';
+      if (sub) return sub;
+    }
+    return '';
+  };
+  return id ? walk(categories.value) || id : '-';
+}
+
+onMounted(async () => {
+  try {
+    [categories.value, dblinks.value] = await Promise.all([getCategoryTree(), getOnlineDblinkList()]);
+  } catch {
+    categories.value = []; dblinks.value = [];
+  }
+});
 
 function openPreview(row: OnlineFormVO) {
   previewing.value = row;
@@ -235,12 +305,26 @@ function renderPreview(): null | import('#/api/online').OnlineRenderVO {
 <template>
   <Page>
     <Grid>
+      <template #category="{ row }">
+        {{ categoryName(row.categoryId) }}
+      </template>
+      <template #viewType="{ row }">
+        {{ viewTypeLabel(row.viewType) }}
+      </template>
+      <template #storageType="{ row }">
+        <ElTag size="small" :type="row.storageType === 1 ? 'success' : 'info'">
+          {{ row.storageType === 1 ? '物理表' : 'JSON' }}
+        </ElTag>
+      </template>
       <template #status="{ row }">
         <span :class="row.status === 1 ? 'text-green-500' : 'text-orange-500'">
           {{ row.status === 1 ? '已发布' : '草稿' }}
         </span>
       </template>
       <template #action="{ row }">
+        <ElButton v-if="has('online:form:update')" link type="warning" size="small" @click="openFieldDesigner(row)">
+          建模
+        </ElButton>
         <ElButton v-if="has('online:form:update')" link type="primary" size="small" @click="openEdit(row)">
           编辑
         </ElButton>
@@ -271,14 +355,44 @@ function renderPreview(): null | import('#/api/online').OnlineRenderVO {
     >
       <ElForm ref="formRef" :model="form" :rules="rules" label-position="top">
         <ElFormItem label="表单名称" prop="formName">
-          <ElInput v-model="form.formName" placeholder="如：请假申请" />
+          <ElInput v-model="form.formName" placeholder="如：客户查询" />
         </ElFormItem>
         <ElFormItem label="表单编码">
           <ElInput v-model="form.formCode" placeholder="留空自动生成" />
         </ElFormItem>
-        <ElFormItem label="主表标识">
-          <ElInput v-model="form.masterTable" placeholder="业务语义标识（可选）" />
+        <ElFormItem label="所属分类">
+          <ElSelect v-model="form.categoryId" clearable placeholder="选择分类">
+            <ElOption v-for="c in categories" :key="c.categoryId" :label="c.categoryName" :value="c.categoryId" />
+          </ElSelect>
         </ElFormItem>
+        <ElFormItem label="存储类型">
+          <ElSelect v-model="form.storageType">
+            <ElOption v-for="t in ONLINE_STORAGE_TYPES" :key="t.value" :label="t.label" :value="t.value" />
+          </ElSelect>
+        </ElFormItem>
+        <ElFormItem label="视图类型">
+          <ElSelect v-model="form.viewType">
+            <ElOption v-for="t in ONLINE_VIEW_TYPES" :key="t.value" :label="t.label" :value="t.value" />
+          </ElSelect>
+        </ElFormItem>
+        <ElFormItem label="形态">
+          <ElSelect v-model="form.formKind">
+            <ElOption v-for="t in ONLINE_FORM_KINDS" :key="t.value" :label="t.label" :value="t.value" />
+          </ElSelect>
+        </ElFormItem>
+        <template v-if="form.storageType === 1">
+          <ElFormItem label="数据源">
+            <ElSelect v-model="form.dblinkCode" clearable placeholder="默认数据源(workflow)">
+              <ElOption v-for="d in dblinks" :key="d.code" :label="d.name" :value="d.code" />
+            </ElSelect>
+          </ElFormItem>
+          <ElFormItem label="物理表名">
+            <ElInput v-model="form.masterTable" placeholder="如：biz_customer" />
+          </ElFormItem>
+          <ElFormItem label="主键列">
+            <ElInput v-model="form.pkColumn" placeholder="id" />
+          </ElFormItem>
+        </template>
         <ElFormItem label="备注">
           <ElInput v-model="form.remark" type="textarea" :rows="2" />
         </ElFormItem>
@@ -295,6 +409,16 @@ function renderPreview(): null | import('#/api/online').OnlineRenderVO {
       :form-name="designing.formName"
       :widget-json="designing.widgetJson"
       @save="onDesignerSave"
+    />
+
+    <FieldModelDesigner
+      v-if="fieldDesigning"
+      v-model="fieldDesignerVisible"
+      :form-name="fieldDesigning.formName"
+      :field-json="fieldDesigning.fieldJson"
+      :master-table="fieldDesigning.masterTable"
+      :dblink-code="fieldDesigning.dblinkCode"
+      @save="onFieldDesignerSave"
     />
 
     <ElDrawer v-model="previewVisible" title="表单预览" size="640px">
