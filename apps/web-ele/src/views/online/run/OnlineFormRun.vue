@@ -10,7 +10,14 @@
  *   QUERY(1) → 过滤区 + 数据表格 + 新建/编辑/删除操作（操作 formId 跳到编辑页）
  *   FORM(5)  → 主表字段编辑 + 从表 tabs + 保存
  */
-import type { FormRenderVo, FormOperation, FormFieldModel, FormSubTable, FormRefSelect } from '#/api/online';
+import type {
+  AggregateChart,
+  FormFieldModel,
+  FormOperation,
+  FormRefSelect,
+  FormRenderVo,
+  FormSubTable,
+} from '#/api/online';
 
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -36,6 +43,7 @@ import {
 import type { FormInstance } from 'element-plus';
 
 import {
+  aggregateOnlineForm,
   renderFormRuntime,
   runDelete,
   runDetail,
@@ -43,6 +51,7 @@ import {
   runSave,
 } from '#/api/online';
 import { confirmAction } from '../../system/shared/helpers';
+import OnlineChart from './OnlineChart.vue';
 
 // formId 支持 props 或路由 query（菜单/设计器两用）
 const props = withDefaults(defineProps<{ formId?: string; embedded?: boolean }>(), {
@@ -78,6 +87,37 @@ const editFormRef = ref<FormInstance>();
 
 const isQuery = computed(() => render.value?.formType === 1);
 const isEdit = computed(() => render.value?.formType === 5);
+/** 详情页（只读展示 + 从表只读 Tabs），render.formType=viewType: 1查询 2编辑 3详情 */
+const isDetail = computed(() => render.value?.formType === 3);
+/** 统计页（维度+指标聚合图表），viewType=6 */
+const isChart = computed(() => render.value?.formType === 6);
+/** 左分组右列表查询（简化左树右表），viewType=2 */
+const isGroupQuery = computed(() => render.value?.formType === 2);
+/** 左分组右列表：当前选中的分组值 */
+const activeGroup = ref<unknown>(null);
+/** 左分组候选值（来自第一个关联维度的 pick 表单全量数据） */
+const groupValues = ref<Array<Record<string, unknown>>>([]);
+
+async function loadGroupValues() {
+  const first = refSelects.value[0];
+  if (!first?.pickFormId) return;
+  try {
+    const res = await runQuery({ formId: first.pickFormId, filters: {}, pageNum: 1, pageSize: 100 });
+    groupValues.value = res.rows ?? [];
+  } catch {
+    groupValues.value = [];
+  }
+}
+
+function groupLabel(row: Record<string, unknown>): string {
+  const first = refSelects.value[0];
+  const cols = first ? pickDisplayColumns(first) : [];
+  if (cols.length && cols[0]?.fieldKey) {
+    const v = row[cols[0].fieldKey];
+    return v == null ? '(空)' : String(v);
+  }
+  return String(row.id ?? '');
+}
 
 const filterFields = computed<FormFieldModel[]>(() =>
   (render.value?.design?.widgetList ?? []).filter((f) => f.isQuery && f.widgetType !== 'divider'),
@@ -120,8 +160,10 @@ async function load() {
   loading.value = true;
   try {
     render.value = await renderFormRuntime(effectiveFormId.value);
-    if (isQuery.value) await doQuery();
-    else if (isEdit.value) await loadForEdit();
+    if (isQuery.value || isGroupQuery.value) await doQuery();
+    else if (isEdit.value || isDetail.value) await loadForEdit();
+    else if (isChart.value) await loadCharts();
+    if (isGroupQuery.value) await loadGroupValues();
   } catch (e: any) {
     ElMessage.error(e?.message ?? '加载表单失败');
     render.value = null;
@@ -151,6 +193,30 @@ async function doQuery() {
 function onSearch() { pageNum.value = 1; void doQuery(); }
 function onReset() { filters.value = {}; onSearch(); }
 
+// ---- 统计图表（viewType=6）：每个图表卡片一个 OnlineChart 实例 ----
+const charts = ref<AggregateChart[]>([]);
+
+async function loadCharts() {
+  loading.value = true;
+  try {
+    charts.value = await aggregateOnlineForm(render.value!.formId);
+  } catch (e: any) {
+    ElMessage.error(e?.message ?? '统计加载失败');
+  } finally {
+    loading.value = false;
+  }
+}
+
+/** 左分组右列表：选中分组 → 过滤右表 */
+async function onGroupSelect(value: unknown) {
+  const first = refSelects.value[0];
+  if (!first) return;
+  activeGroup.value = activeGroup.value === value ? null : value;
+  filters.value = activeGroup.value == null ? {} : { [first.fkColumn]: activeGroup.value };
+  pageNum.value = 1;
+  await doQuery();
+}
+
 // ---- 操作分派（橙单 operation.type）----
 async function onOperation(op: FormOperation, row?: Record<string, unknown>) {
   switch (op.type) {
@@ -162,6 +228,11 @@ async function onOperation(op: FormOperation, row?: Record<string, unknown>) {
       break;
     case 2: // 删除
       await doDelete(row);
+      break;
+    case 20: // 表单操作（详情等）：跳目标表单带行主键
+      if (op.formId) {
+        await router.push({ name: 'OnlineFormRun', query: { formId: op.formId, pk: row ? String(row.id ?? row._dataId ?? '') : '' } });
+      }
       break;
     case 10: // 批量删除（简化为单条提示）
       ElMessage.info('批量删除请逐条操作');
@@ -301,6 +372,7 @@ async function loadForEdit() {
   } else {
     editPk.value = null;
     editData.value = {};
+    if (isDetail.value) ElMessage.warning('请从列表页点击「详情」进入');
   }
 }
 
@@ -544,6 +616,107 @@ onMounted(load);
           </div>
         </template>
 
+        <!-- 详情页面（只读展示 + 从表只读 Tabs） -->
+        <template v-else-if="isDetail">
+          <div v-loading="detailLoading" class="fr-detail">
+            <div class="fr-detail-grid">
+              <div v-for="f in formFields" :key="f.fieldKey ?? ''" class="fr-detail-item">
+                <span class="fr-di-label">{{ f.label }}</span>
+                <span class="fr-di-value">{{ labelOf(editData, f) }}</span>
+              </div>
+              <div v-if="!formFields.length" class="fr-empty">详情表单未配置字段</div>
+            </div>
+            <div v-if="subTables.length" class="fr-subtables">
+              <ElTabs>
+                <ElTabPane v-for="sub in subTables" :key="sub.edgeId" :label="sub.title">
+                  <table class="fr-table">
+                    <thead><tr>
+                      <th v-for="f in subListFields(sub)" :key="f.fieldKey ?? ''">{{ f.label }}</th>
+                    </tr></thead>
+                    <tbody>
+                      <tr v-for="(srow, si) in (subRowsMap[sub.edgeId] ?? [])" :key="si">
+                        <td v-for="f in subListFields(sub)" :key="f.fieldKey ?? ''">{{ labelOf(srow, f) }}</td>
+                      </tr>
+                      <tr v-if="!(subRowsMap[sub.edgeId] ?? []).length">
+                        <td :colspan="subListFields(sub).length" class="fr-empty">暂无数据</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </ElTabPane>
+              </ElTabs>
+            </div>
+          </div>
+        </template>
+
+        <!-- 统计页（维度+指标聚合图表） -->
+        <template v-else-if="isChart">
+          <div v-if="charts.length" class="fr-chart-grid">
+            <OnlineChart v-for="(c, i) in charts" :key="i" :chart="c" />
+          </div>
+          <div v-else class="fr-empty">该统计表单没有可用图表配置</div>
+        </template>
+
+        <!-- 左分组右列表（简化左树右表：左栏关联维度分组，点击过滤右侧表格） -->
+        <template v-else-if="isGroupQuery">
+          <div class="fr-group-layout">
+            <div class="fr-group-side">
+              <div class="fr-group-title">{{ refSelects[0]?.refTitle ?? '全部分组' }}</div>
+              <div
+                class="fr-group-item"
+                :class="{ active: activeGroup == null }"
+                @click="onGroupSelect(null)"
+              >
+                全部
+              </div>
+              <div
+                v-for="(row, i) in groupValues"
+                :key="i"
+                class="fr-group-item"
+                :class="{ active: activeGroup != null && String(activeGroup) === String(row.id ?? '') }"
+                @click="onGroupSelect(row.id)"
+              >
+                {{ groupLabel(row) }}
+              </div>
+            </div>
+            <div class="fr-group-main">
+              <div class="fr-filter" style="padding: 12px">
+                <ElInput
+                  v-for="f in filterFields.filter((f) => ['input'].includes(f.widgetType ?? ''))" :key="f.fieldKey ?? ''"
+                  v-model="filters[f.fieldKey ?? '']" :placeholder="f.label" clearable style="width: 180px"
+                  @keyup.enter="onSearch"
+                />
+                <ElButton type="primary" size="small" @click="onSearch">查询</ElButton>
+                <ElButton size="small" @click="onReset">重置</ElButton>
+              </div>
+              <div class="fr-table-wrap">
+                <table class="fr-table">
+                  <thead><tr>
+                    <th v-for="f in listFields" :key="f.fieldKey ?? ''">{{ f.label }}</th>
+                    <th class="fr-op-col">操作</th>
+                  </tr></thead>
+                  <tbody>
+                    <tr v-for="(row, idx) in rows" :key="idx">
+                      <td v-for="f in listFields" :key="f.fieldKey ?? ''">{{ labelOf(row, f) }}</td>
+                      <td class="fr-op-col">
+                        <ElButton v-for="op in rowOperations" :key="op.name" link size="small"
+                                  :type="op.type === 2 ? 'danger' : 'primary'" @click="onOperation(op, row)">
+                          {{ op.name }}
+                        </ElButton>
+                      </td>
+                    </tr>
+                    <tr v-if="!rows.length"><td :colspan="listFields.length + 1" class="fr-empty">暂无数据</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="fr-pager">
+                <ElButton size="small" :disabled="pageNum <= 1" @click="pageNum--; doQuery()">上一页</ElButton>
+                <span>第 {{ pageNum }} / {{ Math.max(1, Math.ceil(total / pageSize)) }} 页</span>
+                <ElButton size="small" :disabled="pageNum >= Math.ceil(total / pageSize)" @click="pageNum++; doQuery()">下一页</ElButton>
+              </div>
+            </div>
+          </div>
+        </template>
+
         <div v-else class="fr-empty">暂不支持的表单类型：{{ render.formType }}</div>
       </template>
       <div v-else class="fr-empty">请从菜单进入，或在设计器中预览表单</div>
@@ -673,6 +846,18 @@ onMounted(load);
 .fr-pick-row { cursor: pointer; }
 .fr-pick-row:hover { background: var(--el-color-primary-light-9); }
 .fr-pick-radio { width: 46px; text-align: center; }
+.fr-chart-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; }
+.fr-group-layout { display: flex; gap: 14px; align-items: flex-start; }
+.fr-group-side { width: 200px; flex-shrink: 0; border: 1px solid var(--el-border-color-lighter); border-radius: 8px; overflow: hidden; }
+.fr-group-title { background: var(--el-fill-color-light); font-weight: 600; font-size: 13px; padding: 10px 12px; }
+.fr-group-item { padding: 9px 14px; font-size: 13px; cursor: pointer; border-bottom: 1px solid var(--el-border-color-lighter); }
+.fr-group-item:hover { background: var(--el-fill-color-light); }
+.fr-group-item.active { background: var(--el-color-primary-light-9); color: var(--el-color-primary); font-weight: 600; }
+.fr-group-main { flex: 1; min-width: 0; }
+.fr-detail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; border: 1px solid var(--el-border-color-lighter); border-radius: 8px; padding: 16px; }
+.fr-detail-item { display: flex; flex-direction: column; gap: 4px; }
+.fr-di-label { font-size: 12px; color: var(--el-text-color-secondary); }
+.fr-di-value { font-size: 14px; word-break: break-all; }
 .fr-chip { display: inline-block; background: var(--el-fill-color-light); border-radius: 4px; padding: 4px 10px; margin: 0 6px 6px 0; font-size: 12px; }
 .fr-row { padding: 8px; border-bottom: 1px solid var(--el-border-color-lighter); font-size: 13px; }
 </style>

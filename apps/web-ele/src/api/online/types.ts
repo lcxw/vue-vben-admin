@@ -548,3 +548,12 @@ export interface FormRenderVo {
   forms: Array<{ formId: string; formCode?: string; formName: string; pageRole?: string; viewType?: number; formKind?: number }>;
   runtimeBase: string;
 }
+
+/** 统计图表聚合结果（维度+指标） */
+export interface AggregateChart {
+  title: string;
+  /** bar-柱状 pie-饼图 line-折线 */
+  type: string;
+  dictCode?: string;
+  data: Array<{ name: string; value: number | string }>;
+}
