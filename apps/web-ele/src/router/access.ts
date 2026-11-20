@@ -14,8 +14,32 @@ import { $t } from '#/locales';
 
 const forbiddenComponent = () => import('#/views/_core/fallback/forbidden.vue');
 
+/**
+ * 页面组件表。
+ *
+ * import.meta.glob 是「编译期快照」：dev server 在新增视图文件之前启动的话，
+ * 快照里就没有这些新文件，后端菜单下发的 component 会解析成 404 页
+ * （generate-routes-backend.ts: "route component is invalid"）。
+ *
+ * 这里对在线表单模块的视图额外做显式动态 import —— 真实 import() 会在模块
+ * 重编译时被 Vite 重新解析，不受旧 glob 快照影响。key 直接用归一化后的
+ * /online/xxx/index.vue 形态（normalizeViewPath 对该形态是恒等变换）。
+ */
+const onlinePageImports: ComponentRecordType = {
+  '/online/form/index.vue': () => import('#/views/online/form/index.vue'),
+  '/online/data/index.vue': () => import('#/views/online/data/index.vue'),
+  '/online/dict/index.vue': () => import('#/views/online/dict/index.vue'),
+  '/online/order/index.vue': () => import('#/views/online/order/index.vue'),
+  '/online/dblink/index.vue': () => import('#/views/online/dblink/index.vue'),
+  '/online/script/index.vue': () => import('#/views/online/script/index.vue'),
+  '/online/modeler/index.vue': () => import('#/views/online/modeler/index.vue'),
+};
+
 async function generateAccess(options: GenerateMenuAndRoutesOptions) {
-  const pageMap: ComponentRecordType = import.meta.glob('../views/**/*.vue');
+  const pageMap: ComponentRecordType = {
+    ...import.meta.glob('../views/**/*.vue'),
+    ...onlinePageImports,
+  };
 
   const layoutMap: ComponentRecordType = {
     BasicLayout,
