@@ -234,6 +234,7 @@ async function onSave() {
   const currentForm = forms.value.find((f) => f.formId === activeFormId.value);
   const isQueryForm = currentForm?.pageRole === 'query';
   const editForm = forms.value.find((f) => f.pageRole === 'edit');
+  const detailForm = forms.value.find((f) => f.pageRole === 'detail');
 
   // 查询表单：生成 tableWidget（列表列 + 操作，操作指向编辑表单 → 橙单跳页/行操作模型）
   let tableWidget: Record<string, unknown> | undefined;
@@ -262,6 +263,10 @@ async function onSave() {
           type: 2, name: '删除', rowOperation: true,
           enabled: true, btnType: 'danger', showOrder: 3,
         },
+        ...detailForm ? [{
+          type: 20, name: '详情', formId: detailForm.formId, rowOperation: true,
+          enabled: true, btnType: 'primary', showOrder: 4,
+        }] : [],
       ],
     };
     // 缓存查询↔编辑表单映射，供运行时组件解析跳转目标
