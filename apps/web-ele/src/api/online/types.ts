@@ -503,6 +503,18 @@ export interface FormSubTable {
   columns: FormFieldModel[];
 }
 
+export interface FormRefSelect {
+  /** 本表外键列（edge.toColumn） */
+  fkColumn: string;
+  refTableId?: string;
+  refTableName?: string;
+  refTitle?: string;
+  refPkColumn?: string;
+  /** 关联选择弹窗表单 Id（pageRole=pick） */
+  pickFormId?: string;
+  displayColumns: FormFieldModel[];
+}
+
 export interface FormDesignTree {
   formKey?: string;
   labelWidth?: string;
@@ -512,6 +524,8 @@ export interface FormDesignTree {
   operationList: FormOperation[];
   /** 主子表编辑：render 从 ONE_TO_MANY 关系边自动推导（零配置） */
   subTables?: FormSubTable[];
+  /** 一对一/多对一关联选择：render 从指向本表的关系边自动推导（零配置） */
+  refSelects?: FormRefSelect[];
 }
 
 export interface FormRenderVo {

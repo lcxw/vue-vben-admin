@@ -10,7 +10,7 @@
  *   QUERY(1) → 过滤区 + 数据表格 + 新建/编辑/删除操作（操作 formId 跳到编辑页）
  *   FORM(5)  → 主表字段编辑 + 从表 tabs + 保存
  */
-import type { FormRenderVo, FormOperation, FormFieldModel, FormSubTable } from '#/api/online';
+import type { FormRenderVo, FormOperation, FormFieldModel, FormSubTable, FormRefSelect } from '#/api/online';
 
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -201,6 +201,88 @@ async function doDelete(row?: Record<string, unknown>) {
   if (ok) { ElMessage.success('已删除'); await doQuery(); }
 }
 
+// ---- 一对一/多对一关联选择（render 自动推导，借鉴橙单"一对一选择页面"） ----
+const refSelects = computed(() => render.value?.design?.refSelects ?? []);
+function refSelectFor(fieldKey?: string): FormRefSelect | undefined {
+  if (!fieldKey) return undefined;
+  return refSelects.value.find((r) => r.fkColumn === fieldKey);
+}
+/** 外键→显示文本缓存（编辑载入后按 pick 表单回查展示列） */
+const refLabelMap = ref<Record<string, string>>({});
+
+async function loadRefLabels() {
+  for (const rs of refSelects.value) {
+    const fkValue = editData.value[rs.fkColumn];
+    if (fkValue && rs.pickFormId && rs.displayColumns.length) {
+      try {
+        const detail = await runDetail(rs.pickFormId, fkValue as string);
+        const firstCol = rs.displayColumns.find((c) => c.fieldKey && c.fieldKey !== rs.refPkColumn);
+        if (detail && firstCol?.fieldKey) {
+          refLabelMap.value[rs.fkColumn] = String(detail[firstCol.fieldKey] ?? fkValue);
+        }
+      } catch {
+        refLabelMap.value[rs.fkColumn] = String(fkValue);
+      }
+    }
+  }
+}
+
+// 关联选择弹窗
+const pickVisible = ref(false);
+const pickRef = ref<null | FormRefSelect>(null);
+const pickRows = ref<Array<Record<string, unknown>>>([]);
+const pickLoading = ref(false);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const pickFilters = ref<Record<string, any>>({});
+const pickPageNum = ref(1);
+const pickTotal = ref(0);
+
+function pickDisplayColumns(rs: FormRefSelect): FormFieldModel[] {
+  const list = (rs.displayColumns ?? []).filter((c) => c.isList && c.fieldKey && c.fieldKey !== rs.refPkColumn);
+  return list.length ? list.slice(0, 5) : (rs.displayColumns ?? []).slice(0, 5);
+}
+
+async function openPickDialog(rs: FormRefSelect) {
+  pickRef.value = rs;
+  pickFilters.value = {};
+  pickPageNum.value = 1;
+  pickVisible.value = true;
+  await doPickQuery();
+}
+
+async function doPickQuery() {
+  const rs = pickRef.value;
+  if (!rs?.pickFormId) return;
+  pickLoading.value = true;
+  try {
+    const clean: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(pickFilters.value)) {
+      if (v !== undefined && v !== null && String(v) !== '') clean[k] = v;
+    }
+    const res = await runQuery({ formId: rs.pickFormId, filters: clean, pageNum: pickPageNum.value, pageSize: 10 });
+    pickRows.value = res.rows ?? [];
+    pickTotal.value = res.total ?? 0;
+  } catch (e: any) {
+    ElMessage.error(e?.message ?? '加载关联数据失败');
+  } finally {
+    pickLoading.value = false;
+  }
+}
+
+function confirmPick(row: Record<string, unknown>) {
+  const rs = pickRef.value;
+  if (!rs) return;
+  editData.value[rs.fkColumn] = row.id ?? row._dataId ?? null;
+  const firstCol = pickDisplayColumns(rs)[0];
+  if (firstCol?.fieldKey) refLabelMap.value[rs.fkColumn] = String(row[firstCol.fieldKey] ?? row.id);
+  pickVisible.value = false;
+}
+
+function clearRef(rs: FormRefSelect) {
+  editData.value[rs.fkColumn] = null;
+  delete refLabelMap.value[rs.fkColumn];
+}
+
 // ---- 编辑表单（主子表：主表区 + 从表 Tabs，借鉴橙单编辑页产品形态） ----
 async function loadForEdit() {
   const pk = route.query.pk as string;
@@ -209,6 +291,7 @@ async function loadForEdit() {
     try {
       editData.value = await runDetail(render.value!.formId, pk);
       editPk.value = pk;
+      await loadRefLabels();
       await loadAllSubRows();
     } catch (e: any) {
       ElMessage.error(e?.message ?? '加载详情失败');
@@ -406,7 +489,14 @@ onMounted(load);
         <template v-else-if="isEdit">
           <ElForm ref="editFormRef" :model="editData" :label-width="(render.design.labelWidth || '110px')" v-loading="detailLoading">
             <ElFormItem v-for="f in formFields" :key="f.fieldKey ?? ''" :label="f.label" :required="f.required">
-              <ElSelect v-if="['select','radio'].includes(f.widgetType ?? '') && optionsOf(f).length"
+              <!-- 关联选择组件（一对一/多对一，render 自动推导） -->
+              <div v-if="refSelectFor(f.fieldKey)" class="fr-ref-select">
+                <ElInput :model-value="refLabelMap[f.fieldKey ?? ''] ?? String(editData[f.fieldKey ?? ''] ?? '')"
+                         :placeholder="`点击选择${refSelectFor(f.fieldKey)!.refTitle ?? ''}`" readonly />
+                <ElButton size="small" type="primary" plain @click="openPickDialog(refSelectFor(f.fieldKey)!)">选择</ElButton>
+                <ElButton v-if="editData[f.fieldKey ?? '']" size="small" @click="clearRef(refSelectFor(f.fieldKey)!)">清空</ElButton>
+              </div>
+              <ElSelect v-else-if="['select','radio'].includes(f.widgetType ?? '') && optionsOf(f).length"
                         v-model="editData[f.fieldKey ?? '']" clearable>
                 <ElOption v-for="o in optionsOf(f)" :key="String(o.value)" :label="o.label" :value="o.value" />
               </ElSelect>
@@ -496,6 +586,46 @@ onMounted(load);
         <ElButton type="primary" :loading="dlgSaving" @click="saveSubDialog">保存</ElButton>
       </template>
     </ElDialog>
+
+    <!-- 关联选择弹窗（一对一/多对一，过滤+表格单选回填） -->
+    <ElDialog
+      v-model="pickVisible"
+      :title="`选择${pickRef?.refTitle ?? '关联数据'}`"
+      width="720px"
+      destroy-on-close
+    >
+      <div class="fr-pick-filter">
+        <ElInput
+          v-for="c in (pickRef?.displayColumns ?? []).filter(c => ['input','textarea'].includes(c.widgetType ?? '') && c.isList).slice(0, 2)"
+          :key="c.fieldKey ?? ''"
+          v-model="pickFilters[c.fieldKey ?? '']"
+          :placeholder="`按${c.label}过滤`"
+          clearable
+          style="width: 200px"
+          @keyup.enter="pickPageNum = 1; doPickQuery()"
+        />
+        <ElButton type="primary" size="small" @click="pickPageNum = 1; doPickQuery()">查询</ElButton>
+      </div>
+      <div v-loading="pickLoading" class="fr-pick-table">
+        <table class="fr-table">
+          <thead><tr><th class="fr-pick-radio">选</th>
+            <th v-for="c in pickDisplayColumns(pickRef!)" :key="c.fieldKey ?? ''">{{ c.label }}</th>
+          </tr></thead>
+          <tbody>
+            <tr v-for="(row, i) in pickRows" :key="i" class="fr-pick-row" @click="confirmPick(row)">
+              <td class="fr-pick-radio"><ElTag size="small" type="info">单选</ElTag></td>
+              <td v-for="c in pickDisplayColumns(pickRef!)" :key="c.fieldKey ?? ''">{{ labelOf(row, c) }}</td>
+            </tr>
+            <tr v-if="!pickRows.length"><td :colspan="(pickRef ? pickDisplayColumns(pickRef).length : 0) + 1" class="fr-empty">暂无数据</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="fr-pager">
+        <ElButton size="small" :disabled="pickPageNum <= 1" @click="pickPageNum--; doPickQuery()">上一页</ElButton>
+        <span>第 {{ pickPageNum }} / {{ Math.max(1, Math.ceil(pickTotal / 10)) }} 页</span>
+        <ElButton size="small" :disabled="pickPageNum >= Math.ceil(pickTotal / 10)" @click="pickPageNum++; doPickQuery()">下一页</ElButton>
+      </div>
+    </ElDialog>
   </Page>
 
   <!-- 内嵌预览模式（设计器用） -->
@@ -536,6 +666,13 @@ onMounted(load);
 .fr-sub-locked { background: var(--el-fill-color-light); border: 1px dashed var(--el-border-color); border-radius: 6px; color: var(--el-text-color-secondary); font-size: 13px; padding: 14px; text-align: center; }
 .fr-sub-toolbar { display: flex; justify-content: flex-end; gap: 8px; margin: 4px 0 8px; }
 .fr-fk-static { color: var(--el-text-color-secondary); font-size: 13px; }
+.fr-ref-select { display: flex; gap: 8px; width: 100%; }
+.fr-ref-select .el-input { flex: 1; }
+.fr-pick-filter { display: flex; gap: 8px; margin-bottom: 10px; }
+.fr-pick-table { max-height: 320px; overflow: auto; border: 1px solid var(--el-border-color-lighter); border-radius: 6px; }
+.fr-pick-row { cursor: pointer; }
+.fr-pick-row:hover { background: var(--el-color-primary-light-9); }
+.fr-pick-radio { width: 46px; text-align: center; }
 .fr-chip { display: inline-block; background: var(--el-fill-color-light); border-radius: 4px; padding: 4px 10px; margin: 0 6px 6px 0; font-size: 12px; }
 .fr-row { padding: 8px; border-bottom: 1px solid var(--el-border-color-lighter); font-size: 13px; }
 </style>
