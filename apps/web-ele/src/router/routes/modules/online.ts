@@ -1,17 +1,12 @@
 import type { RouteRecordRaw } from 'vue-router';
 
 /**
- * 在线表单模块内置路由（v3 收敛后：设计器为主入口 + 支撑页 + 运行时）。
+ * 在线表单模块内置路由（v4 收敛）：一个「表单中心」入口。
  *
- * preferences.app.accessMode = 'mixed'：与后端 /menu/all 下发的菜单按 name 合并。
- * 后端菜单 component 必须写成 '/online/xxx/index.vue' 形态才能命中 pageMap。
- *
- * v3 说明：
- * - 旧版割裂页面（表单管理/表单数据/页面编排/数据工作台/模型建模）已从菜单下线
- *   （V21 enabled=0），运行入口统一收敛到唯一运行时组件 OnlineFormRun；
- * - 保留支撑页：字典/数据源/分类/工单/脚本；
- * - OnlineFormRun 为低代码页面的唯一运行时入口（hideInMenu，由菜单 bind_type=1 跳转，
- *   formId 来自 route.meta.onlineFormId 或 query）。
+ * - 表单中心：左侧分类树 + 右侧分页列表（新建/设计/发布/复制/删除）；
+ * - 设计器：视图 Tab + 字段面板 + 12 栅格画布 + 属性面板（formId 由 query 传入，不在菜单出现）；
+ * - 支撑页：字典 / 数据源 / 工单 / 脚本；
+ * - 运行时：已发布表单由菜单 bind_type=1 跳到 run/<pageCode>，统一走 OnlineFormRun。
  */
 const routes: RouteRecordRaw[] = [
   {
@@ -24,22 +19,22 @@ const routes: RouteRecordRaw[] = [
     path: '/online',
     children: [
       {
-        meta: { icon: 'lucide:workflow', title: '页面设计' },
-        name: 'OnlineDesigner',
-        path: 'designer',
-        component: () => import('#/views/online/designer/index.vue'),
+        meta: { icon: 'lucide:forms', title: '表单列表' },
+        name: 'OnlineForm',
+        path: 'form',
+        component: () => import('#/views/online/form/index.vue'),
+      },
+      {
+        meta: { hideInMenu: true, title: '表单设计' },
+        name: 'OnlineFormDesign',
+        path: 'form/design',
+        component: () => import('#/views/online/form/design.vue'),
       },
       {
         meta: { icon: 'lucide:book', title: '在线字典' },
         name: 'OnlineDict',
         path: 'dict',
         component: () => import('#/views/online/dict/index.vue'),
-      },
-      {
-        meta: { icon: 'lucide:folder-tree', title: '表单分类' },
-        name: 'OnlineCategory',
-        path: 'category',
-        component: () => import('#/views/online/category/index.vue'),
       },
       {
         meta: { icon: 'lucide:database-zap', title: '数据源管理' },
@@ -59,10 +54,17 @@ const routes: RouteRecordRaw[] = [
         path: 'script',
         component: () => import('#/views/online/script/index.vue'),
       },
-      /** 在线表单运行时（低代码页面通用入口；由菜单 bind_type=1 跳转，不在菜单显示） */
+      /** 已发布表单运行时（菜单 bind_type=1 → run/<pageCode>） */
       {
         meta: { hideInMenu: true, title: '在线表单' },
         name: 'OnlineFormRun',
+        path: 'run/:pageCode?',
+        component: () => import('#/views/online/run/OnlineFormRun.vue'),
+      },
+      /** 兼容旧菜单路径 */
+      {
+        meta: { hideInMenu: true, title: '在线表单' },
+        name: 'OnlineFormRunLegacy',
         path: 'form-run',
         component: () => import('#/views/online/run/OnlineFormRun.vue'),
       },

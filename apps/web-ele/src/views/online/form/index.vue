@@ -1,458 +1,839 @@
 <script lang="ts" setup>
-/** 在线表单管理：列表 / 新增编辑 / 可视化设计 / 发布 / 克隆 / 删除。 */
-import type { VbenFormSchema } from '#/adapter/form';
-import type { VxeTableGridOptions } from '#/adapter/vxe-table';
-import type { OnlineFormDTO, OnlineFormVO, OnlineDataPermVO, OnlineCategoryVO, OnlineDblinkVO } from '#/api/online';
-
-import { onMounted, reactive, ref } from 'vue';
+/**
+ * 表单中心（v4 唯一入口）：左侧分类树 + 右侧分页列表。
+ * 新建表单 = 选数据源 → 选主表/关联表 → 服务端一次建完容器、表、关系、视图。
+ */
+import { computed, onMounted, reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 
 import {
   ElButton,
-  ElDrawer,
+  ElCheckbox,
+  ElDialog,
   ElForm,
   ElFormItem,
   ElInput,
   ElMessage,
+  ElMessageBox,
   ElOption,
+  ElPagination,
+  ElRadio,
   ElSelect,
+  ElStep,
+  ElSteps,
+  ElTable,
+  ElTableColumn,
+  ElTag,
+  ElTree,
 } from 'element-plus';
 
-import type { FormInstance, FormRules } from 'element-plus';
-
-import { useVbenVxeGrid } from '#/adapter/vxe-table';
+import { getOnlineDblinkList } from '#/api/online/dblink';
 import {
-  cloneOnlineForm,
-  createOnlineForm,
-  deleteOnlineForm,
+  cloneForm,
+  createForm,
+  deleteForm,
+  getFormDetail,
+  listForms,
+  publishForm,
+  unpublishForm,
+  updateForm,
+} from '#/api/online/formCenter';
+import {
+  deleteCategory,
   getCategoryTree,
-  getOnlineDataPerm,
-  getOnlineDblinkList,
-  getOnlineFormPage,
-  ONLINE_DATA_SCOPES,
-  ONLINE_FORM_KINDS,
-  ONLINE_STORAGE_TYPES,
-  ONLINE_VIEW_TYPES,
-  publishOnlineForm,
-  saveOnlineDataPerm,
-  updateOnlineForm,
-} from '#/api/online';
+  getSchemaTables,
+  saveCategory,
+} from '#/api/online/modeling';
 
 import {
   confirmAction,
   usePermission,
   withFeedback,
 } from '../../system/shared/helpers';
-import FieldModelDesigner from './FieldModelDesigner.vue';
-import FormDesigner from './FormDesigner.vue';
-import OnlineFormRenderer from './OnlineFormRenderer.vue';
 
 const { has } = usePermission();
-const drawerVisible = ref(false);
-const designerVisible = ref(false);
-const fieldDesignerVisible = ref(false);
-const previewVisible = ref(false);
-const saving = ref(false);
-const editing = ref<null | OnlineFormVO>(null);
-const designing = ref<null | OnlineFormVO>(null);
-const fieldDesigning = ref<null | OnlineFormVO>(null);
-const previewing = ref<null | OnlineFormVO>(null);
-const categories = ref<OnlineCategoryVO[]>([]);
-const dblinks = ref<OnlineDblinkVO[]>([]);
-const permVisible = ref(false);
-const permForm = reactive({ formId: '', scopeType: 0, customUserIds: '', customDeptIds: '', enabled: 1 });
-const formRef = ref<FormInstance>();
-const form = reactive<OnlineFormDTO>({
-  formCode: '',
+const router = useRouter();
+
+const loading = ref(false);
+const rows = ref<any[]>([]);
+const total = ref(0);
+const pageNum = ref(1);
+const pageSize = ref(10);
+
+const query = reactive({
+  keyword: '',
+  status: undefined as number | undefined,
+  categoryId: 'ALL',
+});
+
+const categories = ref<any[]>([]);
+const categoryInputVisible = ref(false);
+const categoryInput = ref('');
+const categoryParent = ref<string>('');
+
+function mapCategory(nodes: any[]): any[] {
+  return (nodes || []).map((n) => ({
+    id: n.categoryId,
+    name: n.categoryName,
+    count: n.totalFormCount ?? n.formCount ?? 0,
+    children: mapCategory(n.children || []),
+  }));
+}
+
+const treeData = computed(() => {
+  const totalCount = categories.value.reduce((s, c) => s + (c.count || 0), 0);
+  return [
+    {
+      id: 'ALL',
+      name: '全部表单',
+      count: totalCount,
+      children: categories.value,
+    },
+  ];
+});
+
+async function loadCategories() {
+  try {
+    categories.value = mapCategory(await getCategoryTree());
+  } catch {
+    categories.value = [];
+  }
+}
+
+async function loadForms() {
+  loading.value = true;
+  try {
+    const page = await listForms({
+      categoryId: query.categoryId,
+      keyword: query.keyword || undefined,
+      pageNum: pageNum.value,
+      pageSize: pageSize.value,
+      status: query.status,
+    });
+    rows.value = page.records || [];
+    total.value = Number(page.total || 0);
+  } catch {
+    rows.value = [];
+    total.value = 0;
+  } finally {
+    loading.value = false;
+  }
+}
+
+function onTreeClick(node: any) {
+  query.categoryId = node.id;
+  pageNum.value = 1;
+  loadForms();
+}
+
+function onSearch() {
+  pageNum.value = 1;
+  loadForms();
+}
+
+function openCategoryInput(parentId?: string) {
+  categoryParent.value = parentId || '';
+  categoryInput.value = '';
+  categoryInputVisible.value = true;
+}
+
+async function submitCategory() {
+  const name = categoryInput.value.trim();
+  if (!name) return;
+  const ok = await withFeedback(
+    () =>
+      saveCategory({
+        categoryName: name,
+        parentId: categoryParent.value,
+      } as any),
+    '分类已创建',
+  );
+  if (ok) {
+    categoryInputVisible.value = false;
+    await loadCategories();
+    await loadForms();
+  }
+}
+
+async function renameCategory(node: any) {
+  const res = await ElMessageBox.prompt('分类名称', '重命名分类', {
+    inputValue: node.name,
+    showCancelButton: true,
+  }).catch(() => null);
+  if (!res) return;
+  const ok = await withFeedback(
+    () =>
+      saveCategory({
+        categoryId: node.id,
+        categoryName: res.value.trim(),
+        parentId: parentFor(node.id),
+      } as any),
+    '已重命名',
+  );
+  if (ok) await loadCategories();
+}
+
+function parentFor(
+  id: string,
+  nodes: any[] = categories.value,
+  parent = '',
+): string {
+  for (const n of nodes) {
+    if (n.id === id) return parent;
+    const hit = parentFor(id, n.children || [], n.id);
+    if (hit) return hit;
+  }
+  return '';
+}
+
+async function removeCategory(node: any) {
+  if (
+    !(await confirmAction(`删除分类「${node.name}」？其下表单会回到未分类。`))
+  )
+    return;
+  const ok = await withFeedback(() => deleteCategory(node.id), '已删除');
+  if (ok) {
+    await loadCategories();
+    if (query.categoryId === node.id) query.categoryId = 'ALL';
+    await loadForms();
+  }
+}
+
+// ---------------- 新建表单 ----------------
+const createVisible = ref(false);
+const createStep = ref(0);
+const submitting = ref(false);
+const dblinks = ref<any[]>([]);
+const schemaTables = ref<Array<{ tableComment?: string; tableName: string }>>(
+  [],
+);
+const tableLoading = ref(false);
+const tableKeyword = ref('');
+const masterTable = ref('');
+const relatedTables = ref<string[]>([]);
+
+const createFormModel = reactive({
   formName: '',
-  categoryId: undefined,
-  viewType: 2,
+  formCode: '',
+  categoryId: '',
   formKind: 1,
-  storageType: 1,
-  masterTable: '',
-  pkColumn: 'id',
   dblinkCode: '',
   remark: '',
-  widgetJson: '{"widgets":[]}',
-  fieldJson: '{"fields":[]}',
 });
 
-const rules: FormRules = {
-  formName: [{ required: true, message: '请输入表单名称', trigger: 'blur' }],
-};
-
-const searchSchema: VbenFormSchema[] = [
-  { component: 'Input', fieldName: 'keyword', label: '表单名称' },
-];
-
-const [Grid, gridApi] = useVbenVxeGrid({
-  formOptions: { schema: searchSchema, submitOnChange: true },
-  gridOptions: {
-    columns: [
-      { field: 'formName', title: '表单名称', minWidth: 180 },
-      { field: 'formCode', title: '表单编码', minWidth: 160 },
-      { field: 'categoryId', title: '分类', width: 110, slots: { default: 'category' } },
-      { field: 'viewType', title: '视图类型', width: 100, slots: { default: 'viewType' } },
-      {
-        field: 'storageType',
-        title: '存储',
-        width: 90,
-        slots: { default: 'storageType' },
-      },
-      {
-        field: 'status',
-        title: '状态',
-        width: 90,
-        slots: { default: 'status' },
-      },
-      { field: 'version', title: '版本', width: 70 },
-      { field: 'updateTime', title: '更新时间', width: 160 },
-      {
-        align: 'center',
-        field: 'operation',
-        fixed: 'right',
-        slots: { default: 'action' },
-        title: '操作',
-        width: 380,
-      },
-    ],
-    height: 'auto',
-    proxyConfig: {
-      ajax: {
-        query: async ({ page }, formValues: Partial<{ keyword: string }>) =>
-          await getOnlineFormPage({
-            keyword: formValues?.keyword ?? '',
-            pageNum: page?.currentPage ?? 1,
-            pageSize: page?.pageSize ?? 50,
-          }),
-      },
-    },
-    rowConfig: { keyField: 'formId' },
-    toolbarConfig: { custom: true, refresh: true, zoom: true },
-  } as VxeTableGridOptions<OnlineFormVO>,
-});
-
-function resetForm(row?: OnlineFormVO) {
-  Object.assign(form, {
-    formCode: row?.formCode ?? '',
-    formId: row?.formId,
-    formName: row?.formName ?? '',
-    categoryId: row?.categoryId ?? undefined,
-    viewType: row?.viewType ?? 2,
-    formKind: row?.formKind ?? 1,
-    storageType: row?.storageType ?? 1,
-    masterTable: row?.masterTable ?? '',
-    pkColumn: row?.pkColumn ?? 'id',
-    dblinkCode: row?.dblinkCode ?? '',
-    remark: row?.remark ?? '',
-    widgetJson: row?.widgetJson ?? '{"widgets":[]}',
-    fieldJson: row?.fieldJson ?? '{"fields":[]}',
-  });
-  formRef.value?.clearValidate();
-}
-
-function openCreate() {
-  editing.value = null;
-  resetForm();
-  drawerVisible.value = true;
-}
-
-function openEdit(row: OnlineFormVO) {
-  editing.value = row;
-  resetForm(row);
-  drawerVisible.value = true;
-}
-
-function openDesigner(row: OnlineFormVO) {
-  designing.value = row;
-  designerVisible.value = true;
-}
-
-function openFieldDesigner(row: OnlineFormVO) {
-  fieldDesigning.value = row;
-  fieldDesignerVisible.value = true;
-}
-
-async function onFieldDesignerSave(fieldJson: string) {
-  const current = fieldDesigning.value;
-  if (!current) return;
-  const ok = await withFeedback(() =>
-    updateOnlineForm({ formId: current.formId, formName: current.formName, fieldJson }),
+const filteredTables = computed(() => {
+  const kw = tableKeyword.value.trim().toLowerCase();
+  if (!kw) return schemaTables.value;
+  return schemaTables.value.filter(
+    (t) =>
+      t.tableName.toLowerCase().includes(kw) ||
+      (t.tableComment || '').toLowerCase().includes(kw),
   );
-  if (ok) await gridApi.query();
+});
+
+async function openCreate() {
+  createStep.value = 0;
+  masterTable.value = '';
+  relatedTables.value = [];
+  tableKeyword.value = '';
+  schemaTables.value = [];
+  Object.assign(createFormModel, {
+    formName: '',
+    formCode: '',
+    categoryId: query.categoryId === 'ALL' ? '' : query.categoryId,
+    formKind: 1,
+    dblinkCode: dblinks.value[0]?.code || '',
+    remark: '',
+  });
+  createVisible.value = true;
 }
 
-function viewTypeLabel(v?: number): string {
-  return ONLINE_VIEW_TYPES.find((t) => t.value === v)?.label ?? '编辑表单';
+async function loadSchemaTables() {
+  if (!createFormModel.dblinkCode) {
+    ElMessage.warning('请先选择数据源');
+    return false;
+  }
+  tableLoading.value = true;
+  try {
+    schemaTables.value = await getSchemaTables(createFormModel.dblinkCode);
+  } catch {
+    schemaTables.value = [];
+  } finally {
+    tableLoading.value = false;
+  }
+  return true;
 }
 
-function categoryName(id?: string): string {
-  const walk = (nodes: OnlineCategoryVO[]): string => {
-    for (const n of nodes) {
-      if (n.categoryId === id) return n.categoryName;
-      const sub = n.children ? walk(n.children) : '';
-      if (sub) return sub;
-    }
-    return '';
-  };
-  return id ? walk(categories.value) || id : '-';
+async function nextStep() {
+  if (!createFormModel.formName.trim()) {
+    ElMessage.warning('请输入表单名称');
+    return;
+  }
+  if (!createFormModel.dblinkCode) {
+    ElMessage.warning('请选择数据源');
+    return;
+  }
+  if (await loadSchemaTables()) createStep.value = 1;
+}
+
+function toggleRelated(row: any) {
+  if (row.tableName === masterTable.value) return;
+  const idx = relatedTables.value.indexOf(row.tableName);
+  if (idx !== -1) relatedTables.value.splice(idx, 1);
+  else relatedTables.value.push(row.tableName);
+}
+
+async function submitCreate() {
+  if (!masterTable.value) {
+    ElMessage.warning('请选择一张主表');
+    return;
+  }
+  submitting.value = true;
+  try {
+    const detail = await createForm({
+      categoryId: createFormModel.categoryId || undefined,
+      dblinkCode: createFormModel.dblinkCode,
+      formCode: createFormModel.formCode.trim() || undefined,
+      formKind: createFormModel.formKind,
+      formName: createFormModel.formName.trim(),
+      masterTable: masterTable.value,
+      relatedTables: relatedTables.value,
+      remark: createFormModel.remark || undefined,
+    });
+    createVisible.value = false;
+    ElMessage.success('表单已创建，进入设计器');
+    await loadForms();
+    await loadCategories();
+    router.push({
+      path: '/online/form/design',
+      query: { formId: detail.formId },
+    });
+  } finally {
+    submitting.value = false;
+  }
+}
+
+// ---------------- 行操作 ----------------
+function openDesign(row: any, mode?: string) {
+  router.push({
+    path: '/online/form/design',
+    query: { formId: row.formId, ...(mode ? { mode } : {}) },
+  });
+}
+
+const editVisible = ref(false);
+const editing = ref<any>(null);
+const editModel = reactive({
+  formName: '',
+  formCode: '',
+  categoryId: '',
+  remark: '',
+});
+
+async function openEdit(row: any) {
+  editing.value = row;
+  Object.assign(editModel, {
+    formName: row.formName,
+    formCode: row.formCode,
+    categoryId: row.categoryId || '',
+    remark: row.remark || '',
+  });
+  editVisible.value = true;
+}
+
+async function submitEdit() {
+  if (!editing.value) return;
+  const ok = await withFeedback(
+    () =>
+      updateForm({
+        categoryId: editModel.categoryId || '',
+        formCode: editModel.formCode.trim() || undefined,
+        formId: editing.value.formId,
+        formName: editModel.formName.trim(),
+        remark: editModel.remark,
+      }),
+    '已保存',
+  );
+  if (ok) {
+    editVisible.value = false;
+    await loadForms();
+    await loadCategories();
+  }
+}
+
+async function onPublish(row: any) {
+  const detail = await getFormDetail(row.formId).catch(() => null);
+  const entryViewId =
+    detail?.defaultViewId ||
+    detail?.views?.find((v) => v.viewType === 6)?.viewId ||
+    detail?.views?.find((v) => v.viewType === 1)?.viewId;
+  const ok = await withFeedback(
+    () => publishForm({ entryViewId, formId: row.formId }),
+    '已发布并绑定菜单',
+  );
+  if (ok) await loadForms();
+}
+
+async function onUnpublish(row: any) {
+  const ok = await withFeedback(() => unpublishForm(row.formId), '已取消发布');
+  if (ok) await loadForms();
+}
+
+async function onClone(row: any) {
+  const ok = await withFeedback(() => cloneForm(row.formId), '已复制为副本');
+  if (ok) {
+    await loadForms();
+    await loadCategories();
+  }
+}
+
+async function onDelete(row: any) {
+  if (
+    !(await confirmAction(
+      `删除表单「${row.formName}」及其全部视图？此操作不可恢复。`,
+    ))
+  )
+    return;
+  const ok = await withFeedback(() => deleteForm(row.formId), '已删除');
+  if (ok) {
+    await loadForms();
+    await loadCategories();
+  }
+}
+
+function kindLabel(kind?: number) {
+  return { 1: '基础', 5: '统计', 10: '流程', 11: '工单' }[kind || 1] || '基础';
+}
+
+function viewTypeLabel(type: number) {
+  return (
+    {
+      1: '列表',
+      2: '分组',
+      3: '选择',
+      5: '表单',
+      6: '统计',
+      9: '行编辑',
+      10: '详情',
+    }[type] || `${type}`
+  );
 }
 
 onMounted(async () => {
+  await Promise.all([loadCategories(), loadForms()]);
   try {
-    [categories.value, dblinks.value] = await Promise.all([getCategoryTree(), getOnlineDblinkList()]);
+    dblinks.value = await getOnlineDblinkList();
   } catch {
-    categories.value = []; dblinks.value = [];
+    dblinks.value = [];
   }
 });
-
-function openPreview(row: OnlineFormVO) {
-  previewing.value = row;
-  previewVisible.value = true;
-}
-
-async function onSubmit() {
-  const valid = await formRef.value?.validate().catch(() => false);
-  if (!valid) return;
-  saving.value = true;
-  try {
-    const ok = await withFeedback(() =>
-      editing.value
-        ? updateOnlineForm({ ...form })
-        : createOnlineForm({ ...form }),
-    );
-    if (ok) {
-      drawerVisible.value = false;
-      await gridApi.query();
-    }
-  } finally {
-    saving.value = false;
-  }
-}
-
-async function onDesignerSave(widgetJson: string) {
-  const current = designing.value;
-  if (!current) return;
-  const ok = await withFeedback(() =>
-    updateOnlineForm({ formId: current.formId, formName: current.formName, widgetJson }),
-  );
-  if (ok) await gridApi.query();
-}
-
-async function onPublish(row: OnlineFormVO) {
-  const ok = await withFeedback(() => publishOnlineForm(row.formId), '发布成功');
-  if (ok) await gridApi.query();
-}
-
-async function onClone(row: OnlineFormVO) {
-  const ok = await withFeedback(() => cloneOnlineForm(row.formId), '已克隆为草稿');
-  if (ok) await gridApi.query();
-}
-
-async function onDelete(row: OnlineFormVO) {
-  if (!(await confirmAction(`确定删除表单「${row.formName}」？`))) return;
-  const ok = await withFeedback(() => deleteOnlineForm(row.formId), '已删除');
-  if (ok) await gridApi.query();
-}
-
-async function openPerm(row: OnlineFormVO) {
-  const current: null | OnlineDataPermVO = await getOnlineDataPerm(row.formId);
-  Object.assign(permForm, {
-    formId: row.formId,
-    scopeType: current?.scopeType ?? 0,
-    customUserIds: current?.customUserIds ?? '[]',
-    customDeptIds: current?.customDeptIds ?? '[]',
-    enabled: current?.enabled ?? 1,
-  });
-  permVisible.value = true;
-}
-
-async function onPermSave() {
-  let users: string[];
-  let depts: string[];
-  try {
-    users = JSON.parse(permForm.customUserIds || '[]') as string[];
-    depts = JSON.parse(permForm.customDeptIds || '[]') as string[];
-  } catch {
-    ElMessage.warning('自定义用户/部门必须是 JSON 数组字符串');
-    return;
-  }
-  const ok = await withFeedback(() => saveOnlineDataPerm({
-    customDeptIds: depts,
-    customUserIds: users,
-    enabled: permForm.enabled,
-    formId: permForm.formId,
-    scopeType: permForm.scopeType,
-  }));
-  if (ok) permVisible.value = false;
-}
-
-function renderPreview(): null | import('#/api/online').OnlineRenderVO {
-  return previewing.value
-    ? {
-        data: {},
-        formId: previewing.value.formId,
-        formName: previewing.value.formName,
-        schema: previewing.value.widgetJson
-          ? JSON.parse(previewing.value.widgetJson)
-          : { widgets: [] },
-      }
-    : null;
-}
 </script>
 
 <template>
   <Page>
-    <Grid>
-      <template #category="{ row }">
-        {{ categoryName(row.categoryId) }}
-      </template>
-      <template #viewType="{ row }">
-        {{ viewTypeLabel(row.viewType) }}
-      </template>
-      <template #storageType="{ row }">
-        <ElTag size="small" :type="row.storageType === 1 ? 'success' : 'info'">
-          {{ row.storageType === 1 ? '物理表' : 'JSON' }}
-        </ElTag>
-      </template>
-      <template #status="{ row }">
-        <span :class="row.status === 1 ? 'text-green-500' : 'text-orange-500'">
-          {{ row.status === 1 ? '已发布' : '草稿' }}
-        </span>
-      </template>
-      <template #action="{ row }">
-        <ElButton v-if="has('online:form:update')" link type="warning" size="small" @click="openFieldDesigner(row)">
-          建模
-        </ElButton>
-        <ElButton v-if="has('online:form:update')" link type="primary" size="small" @click="openEdit(row)">
-          编辑
-        </ElButton>
-        <ElButton v-if="has('online:form:update')" link type="primary" size="small" @click="openDesigner(row)">
-          设计
-        </ElButton>
-        <ElButton link size="small" @click="openPreview(row)">预览</ElButton>
-        <ElButton v-if="has('online:perm:save')" link type="warning" size="small" @click="openPerm(row)">数据权限</ElButton>
-        <ElButton v-if="has('online:form:publish')" link type="success" size="small" @click="onPublish(row)">
-          发布
-        </ElButton>
-        <ElButton v-if="has('online:form:add')" link size="small" @click="onClone(row)">
-          克隆
-        </ElButton>
-        <ElButton v-if="has('online:form:delete')" link type="danger" size="small" @click="onDelete(row)">
-          删除
-        </ElButton>
-      </template>
-      <template #toolbar-tools>
-        <ElButton v-if="has('online:form:add')" type="primary" @click="openCreate">新增表单</ElButton>
-      </template>
-    </Grid>
+    <div class="flex h-full min-h-[520px] gap-4">
+      <aside
+        class="flex w-64 shrink-0 flex-col rounded-lg border border-border p-3"
+      >
+        <div class="mb-2 flex items-center justify-between">
+          <span class="text-sm font-medium">表单分类</span>
+          <ElButton
+            v-if="has('online:form:add')"
+            link
+            type="primary"
+            @click="openCategoryInput()"
+          >
+            + 新建
+          </ElButton>
+        </div>
+        <div v-if="categoryInputVisible" class="mb-2 flex gap-1">
+          <ElInput
+            v-model="categoryInput"
+            size="small"
+            placeholder="分类名称"
+            @keyup.enter="submitCategory"
+          />
+          <ElButton size="small" type="primary" @click="submitCategory">
+存
+</ElButton>
+        </div>
+        <div class="flex-1 overflow-auto">
+          <ElTree
+            :data="treeData"
+            node-key="id"
+            default-expand-all
+            :expand-on-click-node="false"
+            highlight-current
+            @node-click="onTreeClick"
+          >
+            <template #default="{ data }">
+              <div class="group flex w-full items-center justify-between pr-1">
+                <span class="truncate">{{ data.name }}</span>
+                <span class="flex items-center gap-1">
+                  <span class="text-xs text-gray-400">{{ data.count }}</span>
+                  <ElButton
+                    v-if="data.id !== 'ALL' && has('online:form:update')"
+                    class="hidden group-hover:inline-flex"
+                    link
+                    size="small"
+                    @click.stop="renameCategory(data)"
+                  >
+                    改
+                  </ElButton>
+                  <ElButton
+                    v-if="data.id !== 'ALL' && has('online:form:delete')"
+                    class="hidden group-hover:inline-flex"
+                    link
+                    size="small"
+                    type="danger"
+                    @click.stop="removeCategory(data)"
+                  >
+                    删
+                  </ElButton>
+                </span>
+              </div>
+            </template>
+          </ElTree>
+        </div>
+      </aside>
 
-    <ElDrawer
-      v-model="drawerVisible"
-      :title="editing ? '编辑表单' : '新增表单'"
-      size="480px"
+      <section class="flex min-w-0 flex-1 flex-col">
+        <div class="mb-3 flex flex-wrap items-center gap-2">
+          <ElInput
+            v-model="query.keyword"
+            class="!w-56"
+            clearable
+            placeholder="表单名称 / 编码 / 主表"
+            @keyup.enter="onSearch"
+            @clear="onSearch"
+          />
+          <ElSelect
+            v-model="query.status"
+            class="!w-32"
+            clearable
+            placeholder="全部状态"
+            @change="onSearch"
+          >
+            <ElOption label="草稿" :value="0" />
+            <ElOption label="已发布" :value="1" />
+          </ElSelect>
+          <ElButton @click="onSearch">查询</ElButton>
+          <div class="flex-1"></div>
+          <ElButton
+            v-if="has('online:form:add')"
+            type="primary"
+            @click="openCreate"
+            >
+新建表单
+</ElButton>
+        </div>
+
+        <ElTable
+          v-loading="loading"
+          :data="rows"
+          border
+          height="100%"
+          class="flex-1"
+          row-key="formId"
+        >
+          <ElTableColumn label="表单" min-width="220">
+            <template #default="{ row }">
+              <div class="flex flex-col">
+                <span class="font-medium">{{ row.formName }}</span>
+                <span class="text-xs text-gray-400">{{ row.formCode }} · {{ kindLabel(row.formKind) }}</span>
+              </div>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn label="分类" width="110">
+            <template #default="{ row }">
+{{
+              row.categoryName || '-'
+            }}
+</template>
+          </ElTableColumn>
+          <ElTableColumn label="主表" min-width="160">
+            <template #default="{ row }">
+              <span class="text-sm">{{ row.masterTable || '-' }}</span>
+              <div class="text-xs text-gray-400">
+                {{ row.masterTableComment }}
+              </div>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn label="视图" width="160">
+            <template #default="{ row }">
+              <div class="flex flex-wrap gap-1">
+                <ElTag
+                  v-for="t in row.viewTypes"
+                  :key="t"
+                  size="small"
+                  type="info"
+                >
+                  {{ viewTypeLabel(t) }}
+                </ElTag>
+                <span class="text-xs text-gray-400">共 {{ row.viewCount }} 个</span>
+              </div>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn label="状态" width="90">
+            <template #default="{ row }">
+              <ElTag :type="row.status === 1 ? 'success' : 'info'" size="small">
+                {{ row.status === 1 ? '已发布' : '草稿' }}
+              </ElTag>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn label="更新时间" width="150">
+            <template #default="{ row }">
+{{
+              (row.updateTime || '').replace('T', ' ').slice(0, 16)
+            }}
+</template>
+          </ElTableColumn>
+          <ElTableColumn label="操作" fixed="right" width="260">
+            <template #default="{ row }">
+              <ElButton
+                link
+                type="primary"
+                size="small"
+                @click="openDesign(row)"
+                >
+设计
+</ElButton>
+              <ElButton link size="small" @click="openDesign(row, 'preview')">
+预览
+</ElButton>
+              <ElButton
+                v-if="has('online:form:update')"
+                link
+                size="small"
+                @click="openEdit(row)"
+                >
+编辑
+</ElButton>
+              <ElButton
+                v-if="has('online:form:publish') && row.status !== 1"
+                link
+                type="success"
+                size="small"
+                @click="onPublish(row)"
+              >
+                发布
+              </ElButton>
+              <ElButton
+                v-if="has('online:form:publish') && row.status === 1"
+                link
+                type="warning"
+                size="small"
+                @click="onUnpublish(row)"
+              >
+                取消发布
+              </ElButton>
+              <ElButton
+                v-if="has('online:form:add')"
+                link
+                size="small"
+                @click="onClone(row)"
+                >
+复制
+</ElButton>
+              <ElButton
+                v-if="has('online:form:delete')"
+                link
+                type="danger"
+                size="small"
+                @click="onDelete(row)"
+              >
+                删除
+              </ElButton>
+            </template>
+          </ElTableColumn>
+        </ElTable>
+
+        <div class="mt-3 flex justify-end">
+          <ElPagination
+            v-model:current-page="pageNum"
+            v-model:page-size="pageSize"
+            :page-sizes="[10, 20, 50]"
+            :total="total"
+            background
+            layout="total, sizes, prev, pager, next"
+            @current-change="loadForms"
+            @size-change="loadForms"
+          />
+        </div>
+      </section>
+    </div>
+
+    <!-- 新建表单：选数据源 → 选表 -->
+    <ElDialog
+      v-model="createVisible"
+      title="新建表单"
+      width="860px"
+      destroy-on-close
     >
-      <ElForm ref="formRef" :model="form" :rules="rules" label-position="top">
-        <ElFormItem label="表单名称" prop="formName">
-          <ElInput v-model="form.formName" placeholder="如：客户查询" />
-        </ElFormItem>
-        <ElFormItem label="表单编码">
-          <ElInput v-model="form.formCode" placeholder="留空自动生成" />
-        </ElFormItem>
-        <ElFormItem label="所属分类">
-          <ElSelect v-model="form.categoryId" clearable placeholder="选择分类">
-            <ElOption v-for="c in categories" :key="c.categoryId" :label="c.categoryName" :value="c.categoryId" />
-          </ElSelect>
-        </ElFormItem>
-        <ElFormItem label="存储类型">
-          <ElSelect v-model="form.storageType">
-            <ElOption v-for="t in ONLINE_STORAGE_TYPES" :key="t.value" :label="t.label" :value="t.value" />
-          </ElSelect>
-        </ElFormItem>
-        <ElFormItem label="视图类型">
-          <ElSelect v-model="form.viewType">
-            <ElOption v-for="t in ONLINE_VIEW_TYPES" :key="t.value" :label="t.label" :value="t.value" />
-          </ElSelect>
-        </ElFormItem>
-        <ElFormItem label="形态">
-          <ElSelect v-model="form.formKind">
-            <ElOption v-for="t in ONLINE_FORM_KINDS" :key="t.value" :label="t.label" :value="t.value" />
-          </ElSelect>
-        </ElFormItem>
-        <template v-if="form.storageType === 1">
-          <ElFormItem label="数据源">
-            <ElSelect v-model="form.dblinkCode" clearable placeholder="默认数据源(workflow)">
-              <ElOption v-for="d in dblinks" :key="d.code" :label="d.name" :value="d.code" />
+      <ElSteps :active="createStep" class="mb-4">
+        <ElStep title="基础信息" description="名称、分类、数据源" />
+        <ElStep title="选择数据表" description="主表 + 关联表" />
+      </ElSteps>
+
+      <div v-if="createStep === 0">
+        <ElForm label-width="92px">
+          <ElFormItem label="表单名称" required>
+            <ElInput
+              v-model="createFormModel.formName"
+              placeholder="如：客户管理"
+            />
+          </ElFormItem>
+          <ElFormItem label="表单编码">
+            <ElInput
+              v-model="createFormModel.formCode"
+              placeholder="留空自动生成，如 biz_customer_mgr"
+            />
+          </ElFormItem>
+          <ElFormItem label="所属分类">
+            <ElSelect
+              v-model="createFormModel.categoryId"
+              clearable
+              placeholder="未分类"
+              class="w-full"
+            >
+              <ElOption label="未分类" value="" />
+              <ElOption
+                v-for="c in categories"
+                :key="c.id"
+                :label="c.name"
+                :value="c.id"
+              />
             </ElSelect>
           </ElFormItem>
-          <ElFormItem label="物理表名">
-            <ElInput v-model="form.masterTable" placeholder="如：biz_customer" />
+          <ElFormItem label="表单形态">
+            <ElSelect v-model="createFormModel.formKind" class="w-full">
+              <ElOption label="基础表单" :value="1" />
+              <ElOption label="统计报表" :value="5" />
+              <ElOption label="流程表单" :value="10" />
+              <ElOption label="工单表单" :value="11" />
+            </ElSelect>
           </ElFormItem>
-          <ElFormItem label="主键列">
-            <ElInput v-model="form.pkColumn" placeholder="id" />
+          <ElFormItem label="数据源" required>
+            <ElSelect
+              v-model="createFormModel.dblinkCode"
+              class="w-full"
+              placeholder="选择数据源"
+            >
+              <ElOption
+                v-for="d in dblinks"
+                :key="d.code"
+                :label="d.name"
+                :value="d.code"
+              />
+            </ElSelect>
           </ElFormItem>
-        </template>
-        <ElFormItem label="备注">
-          <ElInput v-model="form.remark" type="textarea" :rows="2" />
-        </ElFormItem>
-      </ElForm>
+          <ElFormItem label="备注">
+            <ElInput
+              v-model="createFormModel.remark"
+              :rows="2"
+              type="textarea"
+            />
+          </ElFormItem>
+        </ElForm>
+      </div>
+
+      <div v-else>
+        <div class="mb-2 flex items-center gap-2">
+          <ElInput
+            v-model="tableKeyword"
+            class="!w-64"
+            clearable
+            placeholder="搜索表名 / 表注释"
+          />
+          <span class="text-xs text-gray-500">主表决定表单字段，关联表用于子表/选择弹窗</span>
+        </div>
+        <ElTable
+          v-loading="tableLoading"
+          :data="filteredTables"
+          border
+          height="380px"
+          size="small"
+        >
+          <ElTableColumn width="70" label="主表">
+            <template #default="{ row }">
+              <ElRadio
+                v-model="masterTable"
+                :value="row.tableName"
+                @change="
+                  relatedTables = relatedTables.filter(
+                    (t) => t !== row.tableName,
+                  )
+                "
+              />
+            </template>
+          </ElTableColumn>
+          <ElTableColumn width="70" label="关联">
+            <template #default="{ row }">
+              <ElCheckbox
+                :disabled="row.tableName === masterTable"
+                :model-value="relatedTables.includes(row.tableName)"
+                @change="toggleRelated(row)"
+              />
+            </template>
+          </ElTableColumn>
+          <ElTableColumn prop="tableName" label="物理表" min-width="200" />
+          <ElTableColumn prop="tableComment" label="表注释" min-width="200" />
+        </ElTable>
+        <div class="mt-2 text-xs text-gray-500">
+          已选主表：{{ masterTable || '未选择' }}；关联表
+          {{ relatedTables.length }} 张
+        </div>
+      </div>
+
       <template #footer>
-        <ElButton @click="drawerVisible = false">取消</ElButton>
-        <ElButton type="primary" :loading="saving" @click="onSubmit">保存</ElButton>
+        <ElButton @click="createVisible = false">取消</ElButton>
+        <ElButton v-if="createStep === 1" @click="createStep = 0">
+上一步
+</ElButton>
+        <ElButton v-if="createStep === 0" type="primary" @click="nextStep">
+下一步
+</ElButton>
+        <ElButton
+          v-else
+          type="primary"
+          :loading="submitting"
+          @click="submitCreate"
+          >
+创建并设计
+</ElButton>
       </template>
-    </ElDrawer>
+    </ElDialog>
 
-    <FormDesigner
-      v-if="designing"
-      v-model="designerVisible"
-      :form-name="designing.formName"
-      :widget-json="designing.widgetJson"
-      @save="onDesignerSave"
-    />
-
-    <FieldModelDesigner
-      v-if="fieldDesigning"
-      v-model="fieldDesignerVisible"
-      :form-name="fieldDesigning.formName"
-      :field-json="fieldDesigning.fieldJson"
-      :master-table="fieldDesigning.masterTable"
-      :dblink-code="fieldDesigning.dblinkCode"
-      @save="onFieldDesignerSave"
-    />
-
-    <ElDrawer v-model="previewVisible" title="表单预览" size="640px">
-      <OnlineFormRenderer
-        v-if="previewing && previewVisible"
-        :render="renderPreview()"
-      />
-    </ElDrawer>
-  </Page>
-    <ElDrawer v-model="permVisible" title="数据权限配置" size="480px">
-      <ElForm label-position="top">
-        <ElFormItem label="可见范围">
-          <ElSelect v-model="permForm.scopeType">
+    <!-- 编辑基础信息 -->
+    <ElDialog v-model="editVisible" title="编辑表单" width="520px">
+      <ElForm label-width="92px">
+        <ElFormItem label="表单名称">
+          <ElInput v-model="editModel.formName" />
+        </ElFormItem>
+        <ElFormItem label="表单编码">
+          <ElInput v-model="editModel.formCode" />
+        </ElFormItem>
+        <ElFormItem label="所属分类">
+          <ElSelect v-model="editModel.categoryId" clearable class="w-full">
+            <ElOption label="未分类" value="" />
             <ElOption
-              v-for="scope in ONLINE_DATA_SCOPES"
-              :key="scope.value"
-              :label="scope.label"
-              :value="scope.value"
+              v-for="c in categories"
+              :key="c.id"
+              :label="c.name"
+              :value="c.id"
             />
           </ElSelect>
         </ElFormItem>
-        <template v-if="permForm.scopeType === 4">
-          <ElFormItem label="自定义用户 Id（JSON 数组）">
-            <ElInput v-model="permForm.customUserIds" type="textarea" :rows="2" />
-          </ElFormItem>
-          <ElFormItem label="自定义部门 Id（JSON 数组）">
-            <ElInput v-model="permForm.customDeptIds" type="textarea" :rows="2" />
-          </ElFormItem>
-        </template>
+        <ElFormItem label="备注">
+          <ElInput v-model="editModel.remark" :rows="2" type="textarea" />
+        </ElFormItem>
       </ElForm>
       <template #footer>
-        <ElButton @click="permVisible = false">取消</ElButton>
-        <ElButton type="primary" @click="onPermSave">保存权限</ElButton>
+        <ElButton @click="editVisible = false">取消</ElButton>
+        <ElButton type="primary" @click="submitEdit">保存</ElButton>
       </template>
-    </ElDrawer>
-
+    </ElDialog>
+  </Page>
 </template>
