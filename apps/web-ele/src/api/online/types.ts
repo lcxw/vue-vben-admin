@@ -14,7 +14,7 @@ export interface OnlineWidget {
   placeholder?: string;
   width?: number;
   defaultValue?: unknown;
-  options?: Array<{ label: string; value: string | number }>;
+  options?: Array<{ label: string; value: number | string }>;
   dictCode?: string;
   [key: string]: unknown;
 }
@@ -48,7 +48,8 @@ export interface OnlineFormVO {
   updateTime?: string;
 }
 
-export type OnlineFormDTO = Partial<OnlineFormVO> & Pick<OnlineFormVO, 'formName'>;
+export type OnlineFormDTO = Partial<OnlineFormVO> &
+  Pick<OnlineFormVO, 'formName'>;
 
 export interface OnlineFormQuery extends PageQuery {
   keyword?: string;
@@ -69,7 +70,7 @@ export interface OnlineRenderVO {
   version?: number;
   schema?: OnlineFormSchema;
   data?: Record<string, unknown>;
-  dicts?: Record<string, Array<{ label: string; value: string | number }>>;
+  dicts?: Record<string, Array<{ label: string; value: number | string }>>;
   readOnly?: boolean;
 }
 
@@ -100,7 +101,7 @@ export type OnlineDictDTO = Partial<OnlineDictVO> &
 
 export interface OnlineDictOption {
   label: string;
-  value: string | number;
+  value: number | string;
 }
 
 /** 控件类型字典（与后端 WidgetType.ALL 一一对应） */
@@ -239,17 +240,58 @@ export interface OnlineScriptLogVO {
 
 // ==================== 在线表单建模重构（V14+） ====================
 
+/** 字段/控件事件脚本 */
+export interface FormWidgetEvent {
+  id?: string;
+  /** visible / disabled / change / beforeQuery / afterQuery / afterCreate / rowClick / cellClick */
+  eventType: string;
+  name?: string;
+  enabled?: boolean;
+  script?: string;
+}
+
+/** 控件样式配置 */
+export interface FormWidgetStyle {
+  width?: string;
+  labelWidth?: number | string;
+  margin?: string;
+  padding?: string;
+  background?: string;
+  borderRadius?: string;
+  border?: string;
+  color?: string;
+  fontSize?: number | string;
+  textAlign?: string;
+  customClass?: string;
+  customStyle?: string;
+}
+
 /** 字段建模项：同时描述渲染/存储/查询/列表策略 */
 export interface FormFieldModel {
   fieldKey: string;
+  /** 设计态唯一 key */
+  key?: string;
   column?: string;
   label: string;
   widgetType: string;
   dictCode?: string;
-  options?: Array<{ label: string; value: string | number }>;
+  options?: Array<{ label: string; value: number | string }>;
   required?: boolean;
   placeholder?: string;
   width?: number;
+  /** 查询条件固定像素宽，0 表示跟随表单配置 */
+  itemWidth?: number;
+  visible?: boolean;
+  advanced?: boolean;
+  align?: 'center' | 'left' | 'right';
+  fixed?: '' | 'left' | 'right';
+  sortable?: boolean;
+  show?: boolean;
+  minWidth?: number;
+  className?: string;
+  props?: Record<string, any>;
+  events?: FormWidgetEvent[];
+  styleConfig?: FormWidgetStyle;
   defaultValue?: unknown;
   isQuery?: boolean;
   filterType?: number;
@@ -258,6 +300,37 @@ export interface FormFieldModel {
   showOrder?: number;
   validationJson?: string;
   fieldKind?: string;
+}
+
+/** 查询条件区配置 */
+export interface FormFilterConfig {
+  itemWidth: number;
+  gutter: number;
+  columns: number;
+  labelWidth: number;
+  labelPosition: 'left' | 'right' | 'top';
+  collapsible: boolean;
+  defaultRows: number;
+  showSearch: boolean;
+  showReset: boolean;
+  searchText: string;
+  resetText: string;
+  hideLabel: boolean;
+}
+
+/** 左树配置 */
+export interface FormLeftTreeConfig {
+  enabled: boolean;
+  title: string;
+  width: number;
+  dictCode?: string;
+  field?: string;
+  showSearch: boolean;
+  searchPlaceholder: string;
+  defaultExpandAll: boolean;
+  showAllNode: boolean;
+  allLabel: string;
+  events?: FormWidgetEvent[];
 }
 
 /** 表单字段模型配置（form.fieldJson） */
@@ -280,7 +353,8 @@ export interface OnlineCategoryVO {
   remark?: string;
   children?: OnlineCategoryVO[];
 }
-export type OnlineCategoryDTO = Partial<OnlineCategoryVO> & Pick<OnlineCategoryVO, 'categoryName'>;
+export type OnlineCategoryDTO = Partial<OnlineCategoryVO> &
+  Pick<OnlineCategoryVO, 'categoryName'>;
 
 /** 字典项 */
 export interface OnlineDictItemVO {
@@ -322,7 +396,8 @@ export interface OnlinePageVO {
   createTime?: string;
   tabs: OnlinePageTabVO[];
 }
-export type OnlinePageDTO = Partial<OnlinePageVO> & Pick<OnlinePageVO, 'pageName'>;
+export type OnlinePageDTO = Partial<OnlinePageVO> &
+  Pick<OnlinePageVO, 'pageName'>;
 
 /** 运行时表单配置（前端自动渲染的契约核心） */
 export interface FormRuntimeVO {
@@ -336,12 +411,20 @@ export interface FormRuntimeVO {
   pkColumn?: string;
   version?: number;
   fields: FormFieldModel[];
-  dicts: Record<string, Array<{ label: string; value: string | number; parentValue?: string }>>;
+  dicts: Record<
+    string,
+    Array<{ label: string; value: number | string; parentValue?: string }>
+  >;
 }
 
 /** 运行时分页结果 */
 export interface RunQueryVO {
-  rows: Array<Record<string, unknown> & { _labels?: Record<string, unknown>; _dataId?: string }>;
+  rows: Array<
+    Record<string, unknown> & {
+      _labels?: Record<string, unknown>;
+      _dataId?: string;
+    }
+  >;
   total: number;
   pageNum: number;
   pageSize: number;
@@ -349,7 +432,10 @@ export interface RunQueryVO {
 }
 
 /** 数据源表 / 列信息 */
-export interface SchemaTableVO { tableName: string; tableComment?: string }
+export interface SchemaTableVO {
+  tableName: string;
+  tableComment?: string;
+}
 export interface SchemaColumnVO {
   columnName: string;
   dataType?: string;
@@ -359,17 +445,21 @@ export interface SchemaColumnVO {
   columnComment?: string;
 }
 
-/** 视图/形态常量 */
+/** 视图/形态常量（v4：视图类型与 page_role 一一对应） */
 export const ONLINE_VIEW_TYPES = [
-  { label: '查询表单', value: 1 },
-  { label: '编辑表单', value: 2 },
-  { label: '详情表单', value: 3 },
-  { label: '多Tab页面', value: 4 },
-  { label: '弹窗选择', value: 5 },
+  { label: '列表页', value: 1 },
+  { label: '分组列表', value: 2 },
+  { label: '选择弹窗', value: 3 },
+  { label: '表单页', value: 5 },
+  { label: '统计页', value: 6 },
+  { label: '行编辑弹窗', value: 9 },
+  { label: '详情页', value: 10 },
 ] as const;
 export const ONLINE_FORM_KINDS = [
-  { label: '普通页面', value: 1 },
-  { label: '弹窗', value: 2 },
+  { label: '基础表单', value: 1 },
+  { label: '统计报表', value: 5 },
+  { label: '流程表单', value: 10 },
+  { label: '工单表单', value: 11 },
 ] as const;
 export const ONLINE_STORAGE_TYPES = [
   { label: '物理表', value: 1 },
@@ -487,6 +577,22 @@ export interface FormDesignTableWidget {
   operationList: FormOperation[];
   paged?: boolean;
   pageSize?: number;
+  pageSizes?: number[];
+  showIndex?: boolean;
+  border?: boolean;
+  stripe?: boolean;
+  height?: number;
+  maxHeight?: number;
+  orderColumn?: string;
+  orderAsc?: boolean;
+  likeQueryColumn?: string[];
+  /** 是否树形表格：平铺行按 pidColumn 转树 */
+  tree?: boolean;
+  /** 树形父级列（如 parent_id/grade_id） */
+  pidColumn?: string;
+  /** 树形表格默认展开全部 */
+  treeExpandAll?: boolean;
+  styleConfig?: FormWidgetStyle;
 }
 
 export interface FormSubTable {
@@ -518,10 +624,18 @@ export interface FormRefSelect {
 export interface FormDesignTree {
   formKey?: string;
   labelWidth?: string;
+  labelPosition?: string;
   size?: string;
+  /** 查询页布局：flat 纯条件 / tree 左树右表 */
+  layout?: 'flat' | 'tree';
+  filter?: FormFilterConfig;
+  leftTree?: FormLeftTreeConfig;
   widgetList: FormFieldModel[];
   tableWidget?: FormDesignTableWidget;
   operationList: FormOperation[];
+  formEventList?: FormWidgetEvent[];
+  formStyle?: FormWidgetStyle;
+  charts?: Array<Record<string, unknown>>;
   /** 主子表编辑：render 从 ONE_TO_MANY 关系边自动推导（零配置） */
   subTables?: FormSubTable[];
   /** 一对一/多对一关联选择：render 从指向本表的关系边自动推导（零配置） */
@@ -534,6 +648,12 @@ export interface FormRenderVo {
   formName: string;
   /** 1查询 2高级查询 3一对一选择 4多标签 5编辑 10流程 11工单 */
   formType: number;
+  /** v4 视图类型：1列表 2分组 3选择 5表单 6统计 9行编辑 10详情 */
+  viewType?: number;
+  pageId?: string;
+  pageCode?: string;
+  pageName?: string;
+  published?: number;
   formKind: number;
   masterTable?: string;
   pkColumn?: string;
@@ -542,10 +662,17 @@ export interface FormRenderVo {
   design: FormDesignTree;
   tableMap: Record<string, Record<string, unknown>>;
   columnMap: Record<string, Record<string, unknown>>;
-  dicts: Record<string, Array<{ label: string; value: string | number }>>;
+  dicts: Record<string, Array<{ label: string; value: number | string }>>;
   relations: Array<Record<string, unknown>>;
   /** 同页面下的其它表单（查询表单操作解析编辑表单用） */
-  forms: Array<{ formId: string; formCode?: string; formName: string; pageRole?: string; viewType?: number; formKind?: number }>;
+  forms: Array<{
+    formId: string;
+    formCode?: string;
+    formName: string;
+    pageRole?: string;
+    viewType?: number;
+    formKind?: number;
+  }>;
   runtimeBase: string;
 }
 

@@ -27,14 +27,14 @@ const forbiddenComponent = () => import('#/views/_core/fallback/forbidden.vue');
  */
 const onlinePageImports: ComponentRecordType = {
   '/online/form/index.vue': () => import('#/views/online/form/index.vue'),
-  '/online/data/index.vue': () => import('#/views/online/data/index.vue'),
+  '/online/form/design.vue': () => import('#/views/online/form/design.vue'),
   '/online/dict/index.vue': () => import('#/views/online/dict/index.vue'),
   '/online/order/index.vue': () => import('#/views/online/order/index.vue'),
   '/online/dblink/index.vue': () => import('#/views/online/dblink/index.vue'),
   '/online/script/index.vue': () => import('#/views/online/script/index.vue'),
-  '/online/modeler/index.vue': () => import('#/views/online/modeler/index.vue'),
   // 低代码运行时组件（菜单 bind_type=1 的 component 指向这里）
-  '/online/run/OnlineFormRun.vue': () => import('#/views/online/run/OnlineFormRun.vue'),
+  '/online/run/OnlineFormRun.vue': () =>
+    import('#/views/online/run/OnlineFormRun.vue'),
 };
 
 async function generateAccess(options: GenerateMenuAndRoutesOptions) {
