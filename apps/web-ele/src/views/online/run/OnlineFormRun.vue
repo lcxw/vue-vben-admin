@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { FormInstance } from 'element-plus';
+import type { FlowEntryVO } from '#/api/flow';
 
 /**
  * 在线表单运行时（唯一渲染组件，对应橙单 OnlinePageRender）。
@@ -43,6 +44,7 @@ import {
   ElTag,
 } from 'element-plus';
 
+import { getStartableFlowList } from '#/api/flow';
 import {
   aggregateOnlineForm,
   renderFormRuntime,
@@ -50,6 +52,7 @@ import {
   runDetail,
   runQuery,
   runSave,
+  submitOnlineForm,
 } from '#/api/online';
 
 import { confirmAction } from '../../system/shared/helpers';
@@ -100,6 +103,13 @@ const editPk = ref<unknown>(null);
 const editData = ref<Record<string, any>>({});
 const detailLoading = ref(false);
 const editFormRef = ref<FormInstance>();
+
+// 「提交并发起流程」弹窗状态
+const submitVisible = ref(false);
+const submitting = ref(false);
+const startableFlows = ref<FlowEntryVO[]>([]);
+const submitEntryId = ref('');
+const submitTitle = ref('');
 
 const isQuery = computed(() => render.value?.formType === 1);
 const isEdit = computed(() => render.value?.formType === 5);
@@ -718,6 +728,50 @@ async function onSaveEdit() {
   }
 }
 
+/** 打开提交弹窗：实时拉可发起流程，避免展示已挂起/未发布的流程。 */
+async function openSubmitDialog() {
+  if (!render.value) return;
+  const valid = await editFormRef.value?.validate().catch(() => false);
+  if (valid === false) return;
+  try {
+    startableFlows.value = await getStartableFlowList();
+  } catch (error: any) {
+    ElMessage.error(error?.message ?? '加载可发起流程失败');
+    return;
+  }
+  if (startableFlows.value.length === 0) {
+    ElMessage.warning('暂无可发起的流程，请先在流程管理中发布流程');
+    return;
+  }
+  submitEntryId.value = startableFlows.value[0]?.entryId ?? '';
+  submitTitle.value = `${render.value.formName}-${new Date().toISOString().slice(0, 10)}`;
+  submitVisible.value = true;
+}
+
+/** 提交表单：后端同事务落业务数据、工单编号、流程实例并回写状态。 */
+async function onSubmitFlow() {
+  if (!render.value || !submitEntryId.value) return;
+  submitting.value = true;
+  try {
+    const vo = await submitOnlineForm({
+      formId: render.value.formId,
+      entryId: submitEntryId.value,
+      title: submitTitle.value || undefined,
+      data: { ...editData.value },
+      pkValue:
+        editPk.value === null || editPk.value === undefined
+          ? undefined
+          : String(editPk.value),
+    });
+    submitVisible.value = false;
+    ElMessage.success(`已提交，工单号：${vo.orderCode}`);
+  } catch (error: any) {
+    ElMessage.error(error?.message ?? '提交流程失败');
+  } finally {
+    submitting.value = false;
+  }
+}
+
 function onCancel() {
   const back = render.value
     ? sessionStorage.getItem(`backForm_${render.value.formId}`)
@@ -819,6 +873,13 @@ onMounted(load);
           </ElForm>
           <div class="fr-edit-actions">
             <ElButton type="primary" @click="onSaveEdit">保存</ElButton>
+            <ElButton
+              v-if="!embedded"
+              type="warning"
+              :loading="submitting"
+              @click="openSubmitDialog"
+              >提交流程</ElButton
+            >
             <ElButton @click="onCancel">取消</ElButton>
           </div>
 
@@ -1246,6 +1307,40 @@ onMounted(load);
 下一页
 </ElButton>
       </div>
+    </ElDialog>
+
+    <!-- 提交并发起流程 -->
+    <ElDialog
+      v-model="submitVisible"
+      title="提交并发起流程"
+      width="480px"
+      append-to-body
+    >
+      <ElForm label-width="90px">
+        <ElFormItem label="发起流程">
+          <ElSelect v-model="submitEntryId" placeholder="请选择流程">
+            <ElOption
+              v-for="flow in startableFlows"
+              :key="flow.entryId"
+              :label="flow.processDefinitionName"
+              :value="flow.entryId"
+            />
+          </ElSelect>
+        </ElFormItem>
+        <ElFormItem label="工单标题">
+          <ElInput v-model="submitTitle" placeholder="可选，默认使用表单名" />
+        </ElFormItem>
+      </ElForm>
+      <template #footer>
+        <ElButton @click="submitVisible = false">取消</ElButton>
+        <ElButton
+          type="primary"
+          :loading="submitting"
+          :disabled="!submitEntryId"
+          @click="onSubmitFlow"
+          >确认提交</ElButton
+        >
+      </template>
     </ElDialog>
   </Page>
 

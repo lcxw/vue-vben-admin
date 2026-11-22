@@ -165,9 +165,45 @@ export interface OnlineWorkOrderVO {
   title?: string;
   status?: number;
   payloadJson?: string;
+  /** 关联的流程工单 / 实例 / 定义（V28） */
+  flowWorkOrderId?: string;
+  processInstanceId?: string;
+  entryId?: string;
+  /** 原始流程状态：0运行 1挂起 2完成 3驳回 4撤回 5终止 6草稿 */
+  flowStatus?: number;
+  /** 物理表模式业务主键 */
+  businessPk?: string;
+  submitTime?: string;
   createBy?: string;
   createTime?: string;
   updateTime?: string;
+}
+
+/** 在线表单提交并发起流程 */
+export interface OnlineFormSubmitReq {
+  formId: string;
+  entryId?: string;
+  entryPublishId?: string;
+  title?: string;
+  data: Record<string, unknown>;
+  variables?: Record<string, unknown>;
+  assigneeHints?: Record<string, unknown>;
+  businessKey?: string;
+  /** 物理表模式编辑态已存在记录的主键 */
+  pkValue?: string | number;
+}
+
+export interface OnlineFormSubmitVO {
+  orderCode: string;
+  businessKey: string;
+  dataId?: string;
+  businessPk?: string;
+  onlineOrderId?: string;
+  flowWorkOrderId?: string;
+  processInstanceId?: string;
+  flowStatus?: number;
+  status?: number;
+  title?: string;
 }
 
 export interface OnlineDblinkVO {

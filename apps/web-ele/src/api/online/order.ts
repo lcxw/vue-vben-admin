@@ -14,6 +14,15 @@ export function getOnlineOrder(orderCode: string): Promise<OnlineWorkOrderVO> {
   return requestClient.post<OnlineWorkOrderVO>(`${BASE}/view`, { orderCode });
 }
 
+/** 按 businessKey（通常是 WO 工单号）回查在线工单与流程状态。 */
+export function getOnlineOrderByBusinessKey(
+  businessKey: string,
+): Promise<OnlineWorkOrderVO> {
+  return requestClient.post<OnlineWorkOrderVO>(`${BASE}/viewByBusinessKey`, {
+    businessKey,
+  });
+}
+
 export async function getOnlineOrderPage(params: {
   formId?: string;
   pageNum: number;

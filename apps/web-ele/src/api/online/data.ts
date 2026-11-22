@@ -1,5 +1,9 @@
 import type { BackendPage } from '#/api/system/types';
-import type { OnlineFormDataVO } from './types';
+import type {
+  OnlineFormDataVO,
+  OnlineFormSubmitReq,
+  OnlineFormSubmitVO,
+} from './types';
 
 import { requestClient } from '#/api/request';
 import { toGridPage } from '#/api/system/types';
@@ -33,4 +37,9 @@ export function saveOnlineData(data: {
 
 export function deleteOnlineData(dataId: string): Promise<unknown> {
   return requestClient.post<unknown>(`${BASE}/delete`, { dataId });
+}
+
+/** 提交表单并发起流程：业务数据 + 在线工单 + 流程实例同事务落库。 */
+export function submitOnlineForm(data: OnlineFormSubmitReq): Promise<OnlineFormSubmitVO> {
+  return requestClient.post<OnlineFormSubmitVO>(`${BASE}/submit`, data);
 }
