@@ -30,6 +30,14 @@ export default defineConfig(async () => {
             target: 'http://localhost:20007',
             ws: true,
           },
+          // '/api/ai' 也必须在 '/api' 之前：AI 应用（配置管理 + AG-UI SSE）由 ai-application 提供。
+          '/api/ai': {
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/api/, ''),
+            // lunar-cloud ai-application
+            target: 'http://localhost:20010',
+            ws: true,
+          },
           '/api': {
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/api/, ''),

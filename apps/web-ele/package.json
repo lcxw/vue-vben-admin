@@ -41,13 +41,16 @@
     "@vben/styles": "workspace:*",
     "@vben/types": "workspace:*",
     "@vben/utils": "workspace:*",
+    "@ag-ui/client": "^1.0.5",
     "@vueuse/core": "catalog:",
     "bpmn-js": "catalog:",
     "dayjs": "catalog:",
     "element-plus": "catalog:",
+    "markstream-vue": "2.0.25",
     "pinia": "catalog:",
     "vue": "catalog:",
-    "vue-router": "catalog:"
+    "vue-router": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "unplugin-element-plus": "catalog:"
