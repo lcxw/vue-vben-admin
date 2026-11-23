@@ -3,16 +3,12 @@ import { HttpAgent } from '@ag-ui/client';
 import { useAccessStore } from '@vben/stores';
 import MarkdownRender from 'markstream-vue';
 import 'markstream-vue/index.css';
-import { ElMessage } from 'element-plus';
+// 本应用没有全局 app.use(ElementPlus)，模板中使用的组件必须显式导入。
+import { ElButton, ElInput, ElMessage, ElOption, ElSelect } from 'element-plus';
 import { nextTick, onMounted, ref } from 'vue';
 
-import {
-  AI_AGUI_RUN_URL,
-  aiConversationApi,
-  aiExpertApi,
-  type AiConversation,
-  type AiExpert,
-} from '#/api/ai';
+import type { AiConversation, AiExpert } from '#/api/ai';
+import { AI_AGUI_RUN_URL, aiConversationApi, aiExpertApi } from '#/api/ai';
 
 interface ChatMessage {
   id: string;
@@ -41,7 +37,7 @@ function newChat() {
 
 async function loadMeta() {
   experts.value = await aiExpertApi.options();
-  if (!selectedExpert.value && experts.value.length) {
+  if (!selectedExpert.value && experts.value.length > 0) {
     selectedExpert.value = experts.value[0]?.code || '';
   }
   conversations.value = await aiConversationApi.list();
@@ -79,8 +75,10 @@ async function send() {
 
   const userId = `u-${Date.now()}`;
   const assistantId = `a-${Date.now()}`;
-  messages.value.push({ id: userId, role: 'user', content: text });
-  messages.value.push({ id: assistantId, role: 'assistant', content: '' });
+  messages.value.push(
+    { id: userId, role: 'user', content: text },
+    { id: assistantId, role: 'assistant', content: '' },
+  );
   await scrollToBottom();
 
   const token = accessStore.accessToken;
@@ -117,7 +115,7 @@ async function send() {
 
   try {
     await agent.runAgent({});
-    const lastUser = [...messages.value].reverse().find((msg) => msg.role === 'user');
+    const lastUser = messages.value.toReversed().find((msg) => msg.role === 'user');
     await aiConversationApi.sync({
       conversationId: threadId.value,
       expertCode: selectedExpert.value,

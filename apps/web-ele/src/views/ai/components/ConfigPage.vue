@@ -1,6 +1,21 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
+import { onMounted, ref } from 'vue';
+// 本应用没有全局 app.use(ElementPlus)，模板中使用的组件必须在 <script setup> 里显式导入，
+// 否则会被当成普通 DOM 元素渲染，scoped 插槽会被无参调用（Cannot destructure 'row' of undefined）。
+import {
+  ElButton,
+  ElDialog,
+  ElForm,
+  ElFormItem,
+  ElInput,
+  ElMessage,
+  ElMessageBox,
+  ElOption,
+  ElSelect,
+  ElTable,
+  ElTableColumn,
+  ElTag,
+} from 'element-plus';
 
 interface Column {
   prop: string;
@@ -37,7 +52,9 @@ const rows = ref<any[]>([]);
 const loading = ref(false);
 const dialogVisible = ref(false);
 const editing = ref(false);
-const form = reactive<Record<string, any>>({});
+// 用 ref 整体替换对象而不是 delete 动态 key：模板里 form 会自动解包，
+// 行为与 reactive 一致，但避免了 no-dynamic-delete 与 V8 字典模式退化。
+const form = ref<Record<string, any>>({});
 
 async function load() {
   loading.value = true;
@@ -50,27 +67,24 @@ async function load() {
 
 function openAdd() {
   editing.value = false;
-  Object.keys(form).forEach((key) => delete form[key]);
-  for (const field of props.fields) {
-    form[field.prop] = field.type === 'select' ? field.options?.[0]?.value ?? '' : '';
-  }
+  form.value = Object.fromEntries(
+    props.fields.map((field) => [
+      field.prop,
+      field.type === 'select' ? (field.options?.[0]?.value ?? '') : '',
+    ]),
+  );
   dialogVisible.value = true;
 }
 
 function openEdit(row: any) {
   editing.value = true;
-  Object.keys(form).forEach((key) => delete form[key]);
-  Object.assign(form, row);
+  form.value = { ...row };
   dialogVisible.value = true;
 }
 
 async function save() {
   try {
-    if (editing.value) {
-      await props.api.update(form);
-    } else {
-      await props.api.add(form);
-    }
+    await (editing.value ? props.api.update(form.value) : props.api.add(form.value));
     ElMessage.success('保存成功');
     dialogVisible.value = false;
     await load();
@@ -101,7 +115,7 @@ async function extraAction(action: { label: string; call: (row: any) => Promise<
     const result = await action.call(row);
     if (Array.isArray(result)) {
       await ElMessageBox.alert(
-        result.length ? result.join('\n') : '无工具',
+        result.length > 0 ? result.join('\n') : '无工具',
         '执行结果',
       );
     } else {
