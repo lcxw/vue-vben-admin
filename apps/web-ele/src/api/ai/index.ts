@@ -72,6 +72,33 @@ export interface AiExpert {
   kbCodesJson?: string;
   maxIters?: number;
   enabled?: number;
+  createTime?: string;
+  updateTime?: string;
+}
+
+export interface ExpertValidationResult {
+  valid: boolean;
+  modelName?: string;
+  skillCount: number;
+  mcpCount: number;
+  knowledgeBaseCount: number;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface ExpertFormOption {
+  value: string;
+  label: string;
+  disabled: boolean;
+  description?: string;
+}
+
+export interface ExpertFormOptions {
+  models: ExpertFormOption[];
+  prompts: ExpertFormOption[];
+  skills: ExpertFormOption[];
+  mcpServers: ExpertFormOption[];
+  knowledgeBases: ExpertFormOption[];
 }
 
 export interface AiConversation {
@@ -132,6 +159,31 @@ export interface AiAgentTraceDetail {
   spans: AiAgentTraceSpan[];
 }
 
+export interface AiTraceQuery {
+  pageNum?: number;
+  pageSize?: number;
+  keyword?: string;
+  status?: string;
+  expertCode?: string;
+  startTime?: string;
+  endTime?: string;
+}
+
+export interface AiTracePage {
+  list: AiAgentTrace[];
+  total: number;
+}
+
+export interface AiTraceSummary {
+  total: number;
+  running: number;
+  success: number;
+  error: number;
+  cancelled: number;
+  totalTokens: number;
+  avgDurationMs: number;
+}
+
 export interface AiAgentState {
   persisted: boolean;
   contextSize: number;
@@ -174,6 +226,11 @@ export const aiPromptApi = {
 export const aiExpertApi = {
   ...crud<AiExpert>('/ai/expert'),
   options: () => requestClient.post<AiExpert[]>('/ai/expert/options', {}),
+  formOptions: () =>
+    requestClient.post<ExpertFormOptions>('/ai/expert/form-options', {}),
+  validate: (entity: AiExpert) =>
+    requestClient.post<ExpertValidationResult>('/ai/expert/validate', entity),
+  copy: (id: string) => requestClient.post<AiExpert>('/ai/expert/copy', { id }),
 };
 
 export interface AiKnowledgeBase {
@@ -253,11 +310,10 @@ export const aiConversationApi = {
 };
 
 export const aiTraceApi = {
-  list: (status?: string) =>
-    requestClient.post<AiAgentTrace[]>(
-      '/ai/trace/list',
-      status ? { status } : {},
-    ),
+  list: (query: AiTraceQuery = {}) =>
+    requestClient.post<AiTracePage>('/ai/trace/list', query),
+  summary: (query: Omit<AiTraceQuery, 'pageNum' | 'pageSize'> = {}) =>
+    requestClient.post<AiTraceSummary>('/ai/trace/summary', query),
   detail: (id: string) =>
     requestClient.post<AiAgentTraceDetail>('/ai/trace/detail', { id }),
 };

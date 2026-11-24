@@ -52,7 +52,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/views/ai/prompt/index.vue'),
       },
       {
-        meta: { icon: 'lucide:user-cog', title: '专家配置' },
+        meta: { icon: 'lucide:user-cog', title: 'Agent 管理' },
         name: 'AiExpert',
         path: 'expert',
         component: () => import('#/views/ai/expert/index.vue'),
