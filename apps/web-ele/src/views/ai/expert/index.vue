@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { aiExpertApi, aiModelApi, aiPromptApi } from '#/api/ai';
 import { onMounted, ref } from 'vue';
+
+import { aiExpertApi, aiModelApi, aiPromptApi } from '#/api/ai';
+
 import ConfigPage from '../components/ConfigPage.vue';
 
 const models = ref<{ label: string; value: string }[]>([]);
@@ -11,10 +13,16 @@ onMounted(async () => {
     aiModelApi.options(),
     aiPromptApi.list(),
   ]);
-  models.value = modelList.map((item) => ({ label: item.name, value: item.code }));
+  models.value = modelList.map((item) => ({
+    label: item.name,
+    value: item.code,
+  }));
   prompts.value = promptList
     .filter((item) => item.status === 'PUBLISHED')
-    .map((item) => ({ label: `${item.title}@${item.version}`, value: item.code }));
+    .map((item) => ({
+      label: `${item.title}@${item.version}`,
+      value: item.code,
+    }));
 });
 </script>
 
@@ -38,6 +46,7 @@ onMounted(async () => {
       { prop: 'promptVersion', label: '提示词版本（空=最新）' },
       { prop: 'skillCodesJson', label: '技能编码 JSON', type: 'textarea' },
       { prop: 'mcpCodesJson', label: 'MCP 编码 JSON', type: 'textarea' },
+      { prop: 'kbCodesJson', label: '知识库编码 JSON', type: 'textarea' },
     ]"
   />
 </template>

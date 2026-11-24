@@ -22,6 +22,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/views/ai/chat/index.vue'),
       },
       {
+        meta: { icon: 'lucide:activity', title: 'Agent Trace' },
+        name: 'AiTrace',
+        path: 'trace',
+        component: () => import('#/views/ai/trace/index.vue'),
+      },
+      {
         meta: { icon: 'lucide:brain', title: '模型配置' },
         name: 'AiModel',
         path: 'model',
@@ -50,6 +56,12 @@ const routes: RouteRecordRaw[] = [
         name: 'AiExpert',
         path: 'expert',
         component: () => import('#/views/ai/expert/index.vue'),
+      },
+      {
+        meta: { icon: 'lucide:database', title: '知识库' },
+        name: 'AiKnowledge',
+        path: 'knowledge',
+        component: () => import('#/views/ai/knowledge/index.vue'),
       },
     ],
   },

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
+
 // 本应用没有全局 app.use(ElementPlus)，模板中使用的组件必须在 <script setup> 里显式导入，
 // 否则会被当成普通 DOM 元素渲染，scoped 插槽会被无参调用（Cannot destructure 'row' of undefined）。
 import {
@@ -25,7 +26,7 @@ interface Column {
 interface Field {
   prop: string;
   label: string;
-  type?: 'text' | 'textarea' | 'select';
+  type?: 'select' | 'text' | 'textarea';
   options?: { label: string; value: string }[];
 }
 
@@ -51,6 +52,8 @@ const showStatus = props.showStatus !== false;
 const rows = ref<any[]>([]);
 const loading = ref(false);
 const dialogVisible = ref(false);
+const resultDialogVisible = ref(false);
+const resultText = ref('');
 const editing = ref(false);
 // 用 ref 整体替换对象而不是 delete 动态 key：模板里 form 会自动解包，
 // 行为与 reactive 一致，但避免了 no-dynamic-delete 与 V8 字典模式退化。
@@ -84,7 +87,9 @@ function openEdit(row: any) {
 
 async function save() {
   try {
-    await (editing.value ? props.api.update(form.value) : props.api.add(form.value));
+    await (editing.value
+      ? props.api.update(form.value)
+      : props.api.add(form.value));
     ElMessage.success('保存成功');
     dialogVisible.value = false;
     await load();
@@ -94,9 +99,13 @@ async function save() {
 }
 
 async function removeRow(row: any) {
-  await ElMessageBox.confirm(`确认删除「${row.name || row.title || row.code}」？`, '提示', {
-    type: 'warning',
-  });
+  await ElMessageBox.confirm(
+    `确认删除「${row.name || row.title || row.code}」？`,
+    '提示',
+    {
+      type: 'warning',
+    },
+  );
   await props.api.remove(row.id);
   ElMessage.success('已删除');
   await load();
@@ -110,17 +119,23 @@ async function toggleRow(row: any) {
   await load();
 }
 
-async function extraAction(action: { label: string; call: (row: any) => Promise<any> }, row: any) {
+async function extraAction(
+  action: { label: string; call: (row: any) => Promise<any> },
+  row: any,
+) {
   try {
     const result = await action.call(row);
     if (Array.isArray(result)) {
-      await ElMessageBox.alert(
-        result.length > 0 ? result.join('\n') : '无工具',
-        '执行结果',
-      );
+      resultText.value = result
+        .map((item) =>
+          typeof item === 'string' ? item : JSON.stringify(item, null, 2),
+        )
+        .join('\n\n');
+      resultDialogVisible.value = true;
     } else {
       ElMessage.success(typeof result === 'string' ? result : '操作成功');
     }
+    await load();
   } catch (error: any) {
     ElMessage.error(error?.message || '操作失败');
   }
@@ -137,7 +152,13 @@ onMounted(load);
       <ElButton size="small" @click="load">刷新</ElButton>
     </div>
 
-    <ElTable :data="rows" v-loading="loading" border size="small" max-height="620">
+    <ElTable
+      :data="rows"
+      v-loading="loading"
+      border
+      size="small"
+      max-height="620"
+    >
       <ElTableColumn
         v-for="column in columns"
         :key="column.prop"
@@ -152,9 +173,11 @@ onMounted(load);
           </ElTag>
         </template>
       </ElTableColumn>
-      <ElTableColumn label="操作" width="260" fixed="right">
+      <ElTableColumn label="操作" width="310" fixed="right">
         <template #default="{ row }">
-          <ElButton link type="primary" size="small" @click="openEdit(row)">编辑</ElButton>
+          <ElButton link type="primary" size="small" @click="openEdit(row)">
+            编辑
+          </ElButton>
           <ElButton v-if="api.toggle" link size="small" @click="toggleRow(row)">
             {{ row.enabled === 0 ? '启用' : '停用' }}
           </ElButton>
@@ -168,21 +191,42 @@ onMounted(load);
           >
             {{ action.label }}
           </ElButton>
-          <ElButton link type="danger" size="small" @click="removeRow(row)">删除</ElButton>
+          <ElButton link type="danger" size="small" @click="removeRow(row)">
+            删除
+          </ElButton>
         </template>
       </ElTableColumn>
     </ElTable>
 
-    <ElDialog v-model="dialogVisible" :title="`${editing ? '编辑' : '新增'}${title}`" width="620px">
+    <ElDialog v-model="resultDialogVisible" title="执行结果" width="760px">
+      <pre class="result-content">{{ resultText || '无工具' }}</pre>
+      <template #footer>
+        <ElButton @click="resultDialogVisible = false">关闭</ElButton>
+      </template>
+    </ElDialog>
+
+    <ElDialog
+      v-model="dialogVisible"
+      :title="`${editing ? '编辑' : '新增'}${title}`"
+      width="620px"
+    >
       <ElForm :model="form" label-width="110px">
-        <ElFormItem v-for="field in fields" :key="field.prop" :label="field.label">
+        <ElFormItem
+          v-for="field in fields"
+          :key="field.prop"
+          :label="field.label"
+        >
           <ElInput
             v-if="field.type === 'textarea'"
             v-model="form[field.prop]"
             type="textarea"
             :rows="6"
           />
-          <ElSelect v-else-if="field.type === 'select'" v-model="form[field.prop]" style="width: 100%">
+          <ElSelect
+            v-else-if="field.type === 'select'"
+            v-model="form[field.prop]"
+            style="width: 100%"
+          >
             <ElOption
               v-for="option in field.options || []"
               :key="option.value"
@@ -205,12 +249,23 @@ onMounted(load);
 .ai-config-page {
   padding: 12px;
 }
+
 .toolbar {
   display: flex;
-  align-items: center;
   gap: 8px;
+  align-items: center;
   margin-bottom: 12px;
 }
+
+.result-content {
+  max-height: 480px;
+  margin: 0;
+  overflow: auto;
+  font-size: 12px;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
 .title {
   margin-right: auto;
   font-size: 16px;

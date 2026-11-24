@@ -1,19 +1,51 @@
 <script setup lang="ts">
-import { HttpAgent } from '@ag-ui/client';
-import { useAccessStore } from '@vben/stores';
-import MarkdownRender from 'markstream-vue';
-import 'markstream-vue/index.css';
-// 本应用没有全局 app.use(ElementPlus)，模板中使用的组件必须显式导入。
-import { ElButton, ElInput, ElMessage, ElOption, ElSelect } from 'element-plus';
+import type { AiConversation, AiExpert } from '#/api/ai';
+
 import { nextTick, onMounted, ref } from 'vue';
 
-import type { AiConversation, AiExpert } from '#/api/ai';
+import { useAccessStore } from '@vben/stores';
+
+import { HttpAgent } from '@ag-ui/client';
+// 本应用没有全局 app.use(ElementPlus)，模板中使用的组件必须显式导入。
+import { ElButton, ElInput, ElMessage, ElOption, ElSelect } from 'element-plus';
+import MarkdownRender from 'markstream-vue';
+
 import { AI_AGUI_RUN_URL, aiConversationApi, aiExpertApi } from '#/api/ai';
+
+import 'markstream-vue/index.css';
 
 interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant';
+  role: 'assistant' | 'user';
   content: string;
+  complete: boolean;
+}
+
+async function validatedFetch(url: string, init: RequestInit) {
+  const response = await fetch(url, init);
+  const contentType = response.headers.get('content-type') || '';
+  if (
+    response.ok &&
+    contentType.includes('text/event-stream') &&
+    response.body
+  ) {
+    return response;
+  }
+  const copy = response.clone();
+  let message = `AI 服务请求失败（HTTP ${response.status}）`;
+  const text = await copy.text();
+  try {
+    const body = JSON.parse(text);
+    const detail = body?.msg ?? body?.message ?? body?.error;
+    if (typeof detail === 'string' && detail) {
+      message = detail;
+    }
+  } catch {
+    if (text.trim() && !text.trimStart().startsWith('<')) {
+      message = text.trim().slice(0, 300);
+    }
+  }
+  throw new Error(message);
 }
 
 const accessStore = useAccessStore();
@@ -27,6 +59,7 @@ const messages = ref<ChatMessage[]>([]);
 const toolLog = ref<string[]>([]);
 const scroller = ref<HTMLElement>();
 let activeAgent: HttpAgent | undefined;
+let aborted = false;
 
 function newChat() {
   threadId.value = crypto.randomUUID();
@@ -54,14 +87,22 @@ async function openConversation(conv: AiConversation) {
     } catch {
       content = row.contentJson;
     }
-    return { id: row.id, role: row.role === 'USER' ? 'user' : 'assistant', content };
+    return {
+      id: row.id,
+      role: row.role === 'USER' ? 'user' : 'assistant',
+      content,
+      complete: true,
+    };
   });
   toolLog.value = [];
 }
 
 async function scrollToBottom() {
   await nextTick();
-  scroller.value?.scrollTo({ top: scroller.value.scrollHeight, behavior: 'smooth' });
+  scroller.value?.scrollTo({
+    top: scroller.value.scrollHeight,
+    behavior: 'smooth',
+  });
 }
 
 async function send() {
@@ -70,14 +111,21 @@ async function send() {
     return;
   }
   sending.value = true;
+  aborted = false;
   input.value = '';
   toolLog.value = [];
 
-  const userId = `u-${Date.now()}`;
-  const assistantId = `a-${Date.now()}`;
+  const userId = `u-${crypto.randomUUID()}`;
+  const assistantId = `a-${crypto.randomUUID()}`;
+  const assistant: ChatMessage = {
+    id: assistantId,
+    role: 'assistant',
+    content: '',
+    complete: false,
+  };
   messages.value.push(
-    { id: userId, role: 'user', content: text },
-    { id: assistantId, role: 'assistant', content: '' },
+    { id: userId, role: 'user', content: text, complete: true },
+    assistant,
   );
   await scrollToBottom();
 
@@ -85,6 +133,7 @@ async function send() {
   const agent = new HttpAgent({
     url: AI_AGUI_RUN_URL,
     threadId: threadId.value,
+    fetch: validatedFetch,
     headers: {
       'Content-Type': 'application/json',
       'X-Agent-Id': selectedExpert.value,
@@ -92,46 +141,83 @@ async function send() {
     },
   });
   activeAgent = agent;
+  let runError = '';
+  let sawRunFinished = false;
   agent.setMessages(
     messages.value
       .filter((msg) => msg.id !== assistantId)
-      .map((msg) => ({ id: msg.id, role: msg.role, content: msg.content })) as any,
+      .map((msg) => ({
+        id: msg.id,
+        role: msg.role,
+        content: msg.content,
+      })) as any,
   );
   agent.subscribe({
     onEvent: ({ event }: any) => {
-      if (event.type === 'TEXT_MESSAGE_CONTENT') {
-        const target = messages.value.find((msg) => msg.id === assistantId);
+      if (
+        event.type === 'TEXT_MESSAGE_START' ||
+        event.type === 'TEXT_MESSAGE_CONTENT'
+      ) {
+        const target = event.messageId
+          ? messages.value.find((msg) => msg.id === event.messageId) ||
+            assistant
+          : assistant;
         if (target) {
-          target.content += event.delta || '';
-          void scrollToBottom();
+          if (event.messageId) {
+            target.id = event.messageId;
+          }
+          if (event.type === 'TEXT_MESSAGE_CONTENT') {
+            target.content += event.delta || '';
+            void scrollToBottom();
+          }
         }
       } else if (event.type === 'TOOL_CALL_START') {
-        toolLog.value.push(`调用工具 ${event.toolName || ''}`);
+        toolLog.value.push(`调用工具 ${event.toolCallName || ''}`);
       } else if (event.type === 'RUN_ERROR') {
-        ElMessage.error(event.message || 'AI 运行失败');
+        runError = event.message || 'AI 运行失败';
+        ElMessage.error(runError);
+      } else if (event.type === 'RUN_FINISHED') {
+        sawRunFinished = true;
+      } else if (event.type === 'RAW') {
+        const raw = event.event ?? event.rawEvent;
+        if (raw?.error) {
+          runError = String(raw.error);
+          ElMessage.error(runError);
+        }
       }
     },
   });
 
   try {
     await agent.runAgent({});
-    const lastUser = messages.value.toReversed().find((msg) => msg.role === 'user');
-    await aiConversationApi.sync({
-      conversationId: threadId.value,
-      expertCode: selectedExpert.value,
-      title: lastUser?.content.slice(0, 30) || '新会话',
-      messages: messages.value.map((msg) => ({ role: msg.role, content: msg.content })),
-    });
-    await loadMeta();
+    if (aborted) {
+      return;
+    }
+    if (runError) {
+      return;
+    }
+    if (!sawRunFinished) {
+      ElMessage.error('AI 服务未返回完整响应，请检查服务日志后重试');
+      return;
+    }
+    try {
+      await loadMeta();
+    } catch {
+      ElMessage.warning('回复已生成，但会话列表刷新失败');
+    }
   } catch (error: any) {
-    ElMessage.error(error?.message || '请求失败');
+    if (!aborted) {
+      ElMessage.error(error?.message || '请求失败');
+    }
   } finally {
+    assistant.complete = true;
     sending.value = false;
     activeAgent = undefined;
   }
 }
 
 function abort() {
+  aborted = true;
   activeAgent?.abortRun();
   sending.value = false;
 }
@@ -143,7 +229,9 @@ onMounted(loadMeta);
   <div class="ai-chat">
     <aside class="side">
       <div class="side-header">
-        <ElButton type="primary" size="small" style="flex: 1" @click="newChat">新建会话</ElButton>
+        <ElButton type="primary" size="small" style="flex: 1" @click="newChat">
+          新建会话
+        </ElButton>
       </div>
       <div class="side-section-title">选择专家</div>
       <ElSelect v-model="selectedExpert" size="small" style="width: 100%">
@@ -164,7 +252,12 @@ onMounted(loadMeta);
           @click="openConversation(conv)"
         >
           <span>{{ conv.title || '新会话' }}</span>
-          <ElButton link type="danger" size="small" @click.stop="aiConversationApi.remove(conv.id).then(loadMeta)">
+          <ElButton
+            link
+            type="danger"
+            size="small"
+            @click.stop="aiConversationApi.remove(conv.id).then(loadMeta)"
+          >
             删
           </ElButton>
         </div>
@@ -177,10 +270,22 @@ onMounted(loadMeta);
     <main class="main">
       <div ref="scroller" class="messages">
         <div v-if="!messages.length" class="empty">选好专家，开始提问吧</div>
-        <div v-for="msg in messages" :key="msg.id" class="bubble" :class="msg.role">
+        <div
+          v-for="msg in messages"
+          :key="msg.id"
+          class="bubble"
+          :class="msg.role"
+        >
           <div class="role">{{ msg.role === 'user' ? '我' : 'AI' }}</div>
           <div class="content">
-            <MarkdownRender v-if="msg.role === 'assistant'" :content="msg.content" />
+            <MarkdownRender
+              v-if="msg.role === 'assistant'"
+              mode="chat"
+              :content="msg.content"
+              :final="msg.complete"
+              smooth-streaming="auto"
+              :fade="false"
+            />
             <span v-else>{{ msg.content }}</span>
           </div>
         </div>
@@ -196,7 +301,14 @@ onMounted(loadMeta);
         />
         <div class="actions">
           <ElButton v-if="sending" size="small" @click="abort">停止</ElButton>
-          <ElButton type="primary" size="small" :loading="sending" @click="send">发送</ElButton>
+          <ElButton
+            type="primary"
+            size="small"
+            :loading="sending"
+            @click="send"
+          >
+            发送
+          </ElButton>
         </div>
       </div>
     </main>
@@ -206,105 +318,122 @@ onMounted(loadMeta);
 <style scoped>
 .ai-chat {
   display: flex;
+  gap: 12px;
   height: calc(100vh - 120px);
   min-height: 520px;
-  gap: 12px;
 }
+
 .side {
-  width: 240px;
-  padding: 12px;
-  border-radius: 8px;
-  background: var(--el-bg-color-overlay);
   display: flex;
   flex-direction: column;
   gap: 8px;
+  width: 240px;
+  padding: 12px;
+  background: var(--el-bg-color-overlay);
+  border-radius: 8px;
 }
+
 .side-section-title {
+  margin-top: 8px;
   font-size: 12px;
   color: var(--el-text-color-secondary);
-  margin-top: 8px;
 }
+
 .conv-list {
   flex: 1;
   overflow: auto;
 }
+
 .conv-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 8px;
-  border-radius: 6px;
-  cursor: pointer;
   font-size: 13px;
+  cursor: pointer;
+  border-radius: 6px;
 }
+
 .conv-item:hover,
 .conv-item.active {
   background: var(--el-fill-color-light);
 }
+
 .conv-item span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .tool-log {
-  font-size: 11px;
-  color: var(--el-text-color-secondary);
   max-height: 90px;
   overflow: auto;
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
 }
+
 .main {
-  flex: 1;
   display: flex;
+  flex: 1;
   flex-direction: column;
-  border-radius: 8px;
-  background: var(--el-bg-color-overlay);
   overflow: hidden;
+  background: var(--el-bg-color-overlay);
+  border-radius: 8px;
 }
+
 .messages {
   flex: 1;
-  overflow: auto;
   padding: 16px;
+  overflow: auto;
 }
+
 .empty {
+  padding-top: 120px;
   color: var(--el-text-color-secondary);
   text-align: center;
-  padding-top: 120px;
 }
+
 .bubble {
   display: flex;
   gap: 10px;
   margin-bottom: 14px;
 }
+
 .bubble.user {
   flex-direction: row-reverse;
 }
+
 .role {
   flex: 0 0 32px;
   height: 32px;
+  font-size: 12px;
   line-height: 32px;
   text-align: center;
-  border-radius: 50%;
   background: var(--el-color-primary-light-9);
-  font-size: 12px;
+  border-radius: 50%;
 }
+
 .bubble.user .role {
   background: var(--el-color-success-light-9);
 }
+
 .content {
   max-width: 78%;
   padding: 10px 14px;
-  border-radius: 8px;
-  background: var(--el-fill-color-light);
   line-height: 1.6;
+  background: var(--el-fill-color-light);
+  border-radius: 8px;
 }
+
 .composer {
   padding: 12px 16px;
   border-top: 1px solid var(--el-border-color-lighter);
 }
+
 .actions {
   display: flex;
-  justify-content: flex-end;
   gap: 8px;
+  justify-content: flex-end;
   margin-top: 8px;
 }
 </style>

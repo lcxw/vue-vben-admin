@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { aiMcpApi } from '#/api/ai';
+
 import ConfigPage from '../components/ConfigPage.vue';
 
 const api = {
   ...aiMcpApi,
   extra: [
-    { label: '工具', call: (row: any) => aiMcpApi.tools(row.code) },
+    { label: '获取工具', call: (row: any) => aiMcpApi.tools(row.code) },
     { label: '重载', call: () => aiMcpApi.reload() },
   ],
 };
@@ -37,7 +38,12 @@ const api = {
       { prop: 'url', label: 'URL' },
       { prop: 'commandLine', label: 'STDIO 命令' },
       { prop: 'argsJson', label: 'STDIO 参数 JSON' },
-      { prop: 'headersJson', label: '请求头 JSON（留空不修改）', type: 'textarea' },
+      { prop: 'timeoutMs', label: '超时(ms)' },
+      {
+        prop: 'headersJson',
+        label: '请求头 JSON（留空不修改）',
+        type: 'textarea',
+      },
     ]"
   />
 </template>

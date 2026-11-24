@@ -9,8 +9,19 @@ export interface AiModelConfig {
   baseUrl?: string;
   apiKeyCipher?: string;
   paramsJson?: string;
+  endpointPath?: string;
+  timeoutMs?: number;
+  vectorDimensions?: number;
   enabled?: number;
   isDefault?: number;
+}
+
+export interface McpToolInfo {
+  name: string;
+  qualifiedName: string;
+  title?: string;
+  description?: string;
+  inputSchema?: Record<string, unknown>;
 }
 
 export interface AiMcpServer {
@@ -58,6 +69,7 @@ export interface AiExpert {
   promptVersion?: string;
   skillCodesJson?: string;
   mcpCodesJson?: string;
+  kbCodesJson?: string;
   maxIters?: number;
   enabled?: number;
 }
@@ -74,8 +86,55 @@ export interface AiMessage {
   id: string;
   conversationId: string;
   role: string;
+  runId?: string;
   contentJson: string;
   createdAt?: string;
+}
+
+export interface AiAgentTrace {
+  id: string;
+  runId: string;
+  conversationId: string;
+  userId?: string;
+  expertCode?: string;
+  agentName?: string;
+  modelName?: string;
+  status: string;
+  startedAt?: string;
+  endedAt?: string;
+  durationMs?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  inputJson?: string;
+  outputJson?: string;
+  errorMessage?: string;
+}
+
+export interface AiAgentTraceSpan {
+  id: string;
+  traceId: string;
+  spanType: 'MODEL' | 'TOOL';
+  name?: string;
+  externalId?: string;
+  status: string;
+  startedAt?: string;
+  endedAt?: string;
+  durationMs?: number;
+  inputJson?: string;
+  outputJson?: string;
+  tokenUsageJson?: string;
+  errorMessage?: string;
+}
+
+export interface AiAgentTraceDetail {
+  trace: AiAgentTrace;
+  spans: AiAgentTraceSpan[];
+}
+
+export interface AiAgentState {
+  persisted: boolean;
+  contextSize: number;
 }
 
 function crud<T>(base: string) {
@@ -92,13 +151,15 @@ function crud<T>(base: string) {
 export const aiModelApi = {
   ...crud<AiModelConfig>('/ai/model'),
   options: () => requestClient.post<AiModelConfig[]>('/ai/model/options', {}),
+  copy: (id: string) =>
+    requestClient.post<AiModelConfig>('/ai/model/copy', { id }),
   test: (id: string) => requestClient.post<string>('/ai/model/test', { id }),
 };
 
 export const aiMcpApi = {
   ...crud<AiMcpServer>('/ai/mcp'),
   tools: (code: string) =>
-    requestClient.post<string[]>('/ai/mcp/tools', { code }),
+    requestClient.post<McpToolInfo[]>('/ai/mcp/tools', { code }),
   reload: () => requestClient.post<void>('/ai/mcp/reload', {}),
 };
 
@@ -106,7 +167,8 @@ export const aiSkillApi = crud<AiSkill>('/ai/skill');
 
 export const aiPromptApi = {
   ...crud<AiPrompt>('/ai/prompt'),
-  publish: (id: string) => requestClient.post<AiPrompt>('/ai/prompt/publish', { id }),
+  publish: (id: string) =>
+    requestClient.post<AiPrompt>('/ai/prompt/publish', { id }),
 };
 
 export const aiExpertApi = {
@@ -114,17 +176,90 @@ export const aiExpertApi = {
   options: () => requestClient.post<AiExpert[]>('/ai/expert/options', {}),
 };
 
+export interface AiKnowledgeBase {
+  id?: string;
+  code: string;
+  name: string;
+  description?: string;
+  embeddingModelCode: string;
+  chunkSize?: number;
+  chunkOverlap?: number;
+  topK?: number;
+  scoreThreshold?: number;
+  vectorDim?: number;
+  enabled?: number;
+}
+
+export interface AiKnowledgeDoc {
+  id?: string;
+  kbCode: string;
+  fileName: string;
+  fileType?: string;
+  fileSize?: number;
+  chunkCount?: number;
+  status?: string;
+  errorMsg?: string;
+  createTime?: string;
+}
+
+export interface AiKnowledgeHit {
+  docId: string;
+  fileName: string;
+  content: string;
+  score: number;
+}
+
+export const aiKnowledgeApi = {
+  list: () => requestClient.post<AiKnowledgeBase[]>('/ai/kb/list', {}),
+  add: (entity: AiKnowledgeBase) =>
+    requestClient.post<AiKnowledgeBase>('/ai/kb/add', entity),
+  update: (entity: AiKnowledgeBase) =>
+    requestClient.post<AiKnowledgeBase>('/ai/kb/update', entity),
+  remove: (code: string) => requestClient.post<void>('/ai/kb/delete', { code }),
+  toggle: (code: string, enabled: number) =>
+    requestClient.post<void>('/ai/kb/toggle', { code, enabled }),
+  docs: (kbCode: string) =>
+    requestClient.post<AiKnowledgeDoc[]>('/ai/kb/doc/list', { kbCode }),
+  upload: (kbCode: string, file: File) => {
+    const form = new FormData();
+    form.append('kbCode', kbCode);
+    form.append('file', file);
+    return requestClient.post<AiKnowledgeDoc>('/ai/kb/doc/upload', form);
+  },
+  removeDoc: (id: string) =>
+    requestClient.post<void>('/ai/kb/doc/delete', { id }),
+  reindex: (code: string) =>
+    requestClient.post<number>('/ai/kb/reindex', { code }),
+  search: (kbCode: string, query: string, topK?: number) =>
+    requestClient.post<AiKnowledgeHit[]>('/ai/kb/search', {
+      kbCode,
+      query,
+      topK,
+    }),
+};
+
 export const aiConversationApi = {
   list: () => requestClient.post<AiConversation[]>('/ai/conversation/list', {}),
   messages: (conversationId: string) =>
-    requestClient.post<AiMessage[]>('/ai/conversation/messages', { conversationId }),
-  sync: (payload: {
-    conversationId: string;
-    expertCode: string;
-    title?: string;
-    messages: { role: string; content: string }[];
-  }) => requestClient.post<void>('/ai/conversation/sync', payload),
-  remove: (id: string) => requestClient.post<void>('/ai/conversation/delete', { id }),
+    requestClient.post<AiMessage[]>('/ai/conversation/messages', {
+      conversationId,
+    }),
+  remove: (id: string) =>
+    requestClient.post<void>('/ai/conversation/delete', { id }),
+  state: (conversationId: string) =>
+    requestClient.post<AiAgentState>('/ai/conversation/state', {
+      conversationId,
+    }),
+};
+
+export const aiTraceApi = {
+  list: (status?: string) =>
+    requestClient.post<AiAgentTrace[]>(
+      '/ai/trace/list',
+      status ? { status } : {},
+    ),
+  detail: (id: string) =>
+    requestClient.post<AiAgentTraceDetail>('/ai/trace/detail', { id }),
 };
 
 /** AG-UI 端点：由 @ag-ui/client 的 HttpAgent 直连，不走 requestClient。 */
