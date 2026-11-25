@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import type { FormInstance } from 'element-plus';
+
 import type {
   AiExpert,
   ExpertFormOption,
   ExpertFormOptions,
   ExpertValidationResult,
 } from '#/api/ai';
-import type { FormInstance } from 'element-plus';
 
 import { computed, onMounted, reactive, ref } from 'vue';
 
@@ -23,6 +24,8 @@ import {
   ElMessage,
   ElMessageBox,
   ElOption,
+  ElRadio,
+  ElRadioGroup,
   ElSelect,
   ElSwitch,
   ElTable,
@@ -31,6 +34,7 @@ import {
 } from 'element-plus';
 
 import { aiExpertApi } from '#/api/ai';
+
 import { usePermission } from '../../system/shared/helpers';
 
 const { has } = usePermission();
@@ -56,7 +60,9 @@ const rules = {
   code: [{ required: true, message: '请输入编码', trigger: 'blur' }],
   name: [{ required: true, message: '请输入名称', trigger: 'blur' }],
   modelCode: [{ required: true, message: '请选择模型', trigger: 'change' }],
-  maxIters: [{ required: true, message: '请设置最大推理轮次', trigger: 'blur' }],
+  maxIters: [
+    { required: true, message: '请设置最大推理轮次', trigger: 'blur' },
+  ],
 };
 const form = reactive({
   id: '',
@@ -70,6 +76,7 @@ const form = reactive({
   skillCodes: [] as string[],
   mcpCodes: null as null | string[],
   kbCodes: [] as string[],
+  sandboxType: 'LOCAL' as 'LOCAL' | 'REMOTE',
   maxIters: 20,
   enabled: 1,
 });
@@ -77,7 +84,8 @@ const form = reactive({
 const filteredExperts = computed(() => {
   const query = keyword.value.trim().toLowerCase();
   return experts.value.filter((item) => {
-    const matchesStatus = status.value === '' || item.enabled === Number(status.value);
+    const matchesStatus =
+      status.value === '' || item.enabled === Number(status.value);
     const matchesQuery =
       !query ||
       `${item.name} ${item.code} ${item.description ?? ''}`
@@ -139,9 +147,15 @@ function withMissing(
   current: null | string | string[],
 ): ExpertFormOption[] {
   const values = Array.isArray(current) ? current : current ? [current] : [];
-  const missing = values.filter((value) => !options.some((item) => item.value === value));
+  const missing = values.filter(
+    (value) => !options.some((item) => item.value === value),
+  );
   return [
-    ...missing.map((value) => ({ value, label: `${value}（历史绑定）`, disabled: false })),
+    ...missing.map((value) => ({
+      value,
+      label: `${value}（历史绑定）`,
+      disabled: false,
+    })),
     ...options,
   ];
 }
@@ -181,6 +195,7 @@ function resetForm() {
     skillCodes: [],
     mcpCodes: null,
     kbCodes: [],
+    sandboxType: 'LOCAL',
     maxIters: 20,
     enabled: 1,
   });
@@ -208,6 +223,7 @@ function openEdit(row: AiExpert) {
     skillCodes: parseCodes(row.skillCodesJson),
     mcpCodes: row.mcpCodesJson ? parseCodes(row.mcpCodesJson) : null,
     kbCodes: parseCodes(row.kbCodesJson),
+    sandboxType: row.sandboxType === 'REMOTE' ? 'REMOTE' : 'LOCAL',
     maxIters: row.maxIters ?? 20,
     enabled: row.enabled ?? 1,
   });
@@ -217,8 +233,8 @@ function openEdit(row: AiExpert) {
 
 function selectPrompt(value: string) {
   const separator = value.lastIndexOf('@');
-  form.promptCode = separator < 0 ? value : value.slice(0, separator);
-  form.promptVersion = separator < 0 ? '' : value.slice(separator + 1);
+  form.promptCode = separator === -1 ? value : value.slice(0, separator);
+  form.promptVersion = separator === -1 ? '' : value.slice(separator + 1);
   validation.value = null;
 }
 
@@ -245,6 +261,7 @@ function payload(): AiExpert {
     skillCodesJson: codesJson(form.skillCodes) ?? undefined,
     mcpCodesJson: codesJson(form.mcpCodes) ?? undefined,
     kbCodesJson: codesJson(form.kbCodes) ?? undefined,
+    sandboxType: form.sandboxType,
     maxIters: form.maxIters,
     enabled: form.enabled,
   };
@@ -283,9 +300,13 @@ async function toggle(row: AiExpert) {
 }
 
 async function copy(row: AiExpert) {
-  await ElMessageBox.confirm(`复制「${row.name}」为停用状态的专家？`, '复制专家', {
-    type: 'info',
-  });
+  await ElMessageBox.confirm(
+    `复制「${row.name}」为停用状态的专家？`,
+    '复制专家',
+    {
+      type: 'info',
+    },
+  );
   await aiExpertApi.copy(row.id!);
   ElMessage.success('已创建停用副本');
   await load();
@@ -375,21 +396,56 @@ onMounted(async () => {
           </div>
         </template>
       </ElTableColumn>
-      <ElTableColumn prop="description" label="说明" min-width="180" show-overflow-tooltip />
-      <ElTableColumn prop="modelCode" label="模型" min-width="150" show-overflow-tooltip />
-      <ElTableColumn prop="promptCode" label="提示词" min-width="140" show-overflow-tooltip>
-        <template #default="{ row }">{{ row.promptCode || '平台默认' }}</template>
+      <ElTableColumn
+        prop="description"
+        label="说明"
+        min-width="180"
+        show-overflow-tooltip
+      />
+      <ElTableColumn
+        prop="modelCode"
+        label="模型"
+        min-width="150"
+        show-overflow-tooltip
+      />
+      <ElTableColumn
+        prop="promptCode"
+        label="提示词"
+        min-width="140"
+        show-overflow-tooltip
+      >
+        <template #default="{ row }">
+          {{ row.promptCode || '平台默认' }}
+        </template>
       </ElTableColumn>
       <ElTableColumn label="能力" width="220">
         <template #default="{ row }">
-          <ElTag size="small">技能 {{ parseCodes(row.skillCodesJson).length }}</ElTag>
-          <ElTag size="small" type="warning">
-            MCP {{ row.mcpCodesJson ? parseCodes(row.mcpCodesJson).length : '全部' }}
+          <ElTag size="small">
+            技能 {{ parseCodes(row.skillCodesJson).length }}
           </ElTag>
-          <ElTag size="small" type="info">知识库 {{ parseCodes(row.kbCodesJson).length }}</ElTag>
+          <ElTag size="small" type="warning">
+            MCP
+            {{
+              row.mcpCodesJson ? parseCodes(row.mcpCodesJson).length : '全部'
+            }}
+          </ElTag>
+          <ElTag size="small" type="info">
+            知识库 {{ parseCodes(row.kbCodesJson).length }}
+          </ElTag>
+          <ElTag
+            size="small"
+            :type="row.sandboxType === 'REMOTE' ? 'warning' : 'success'"
+          >
+            {{ row.sandboxType === 'REMOTE' ? '远程沙箱' : '本地沙箱' }}
+          </ElTag>
         </template>
       </ElTableColumn>
-      <ElTableColumn prop="maxIters" label="最大轮次" width="90" align="center" />
+      <ElTableColumn
+        prop="maxIters"
+        label="最大轮次"
+        width="90"
+        align="center"
+      />
       <ElTableColumn label="状态" width="90">
         <template #default="{ row }">
           <ElTag :type="row.enabled === 0 ? 'info' : 'success'">
@@ -402,7 +458,9 @@ onMounted(async () => {
       </ElTableColumn>
       <ElTableColumn label="操作" width="230" fixed="right">
         <template #default="{ row }">
-          <ElButton link type="primary" @click="openEdit(row as AiExpert)">配置</ElButton>
+          <ElButton link type="primary" @click="openEdit(row as AiExpert)">
+            配置
+          </ElButton>
           <ElButton
             v-if="has('ai:expert:add')"
             link
@@ -436,11 +494,21 @@ onMounted(async () => {
       size="760px"
       destroy-on-close
     >
-      <ElForm ref="formRef" :model="form" :rules="rules" label-width="120px" :disabled="saving">
+      <ElForm
+        ref="formRef"
+        :model="form"
+        :rules="rules"
+        label-width="120px"
+        :disabled="saving"
+      >
         <section class="form-section">
           <h3>基础信息</h3>
           <ElFormItem label="名称" prop="name" required>
-            <ElInput v-model="form.name" maxlength="128" placeholder="例如：通用运维助手" />
+            <ElInput
+              v-model="form.name"
+              maxlength="128"
+              placeholder="例如：通用运维助手"
+            />
           </ElFormItem>
           <ElFormItem label="编码" prop="code" required>
             <ElInput
@@ -463,8 +531,19 @@ onMounted(async () => {
               placeholder="说明这个 Agent 适合处理什么任务"
             />
           </ElFormItem>
+          <ElFormItem label="沙箱类型">
+            <ElRadioGroup v-model="form.sandboxType">
+              <ElRadio value="LOCAL">本地沙箱</ElRadio>
+              <ElRadio value="REMOTE">远程沙箱</ElRadio>
+            </ElRadioGroup>
+            <span class="field-tip">新会话按此类型创建工作区；默认本地，旧会话沿用原有工作区类型</span>
+          </ElFormItem>
           <ElFormItem label="启用状态">
-            <ElSwitch v-model="form.enabled" :active-value="1" :inactive-value="0" />
+            <ElSwitch
+              v-model="form.enabled"
+              :active-value="1"
+              :inactive-value="0"
+            />
             <span class="field-tip">启用后立即进入聊天 Agent 选择器</span>
           </ElFormItem>
         </section>
@@ -587,7 +666,9 @@ onMounted(async () => {
           <div v-for="error in validation.errors" :key="error">{{ error }}</div>
         </div>
         <div v-if="validation.warnings.length" class="validation-warnings">
-          <div v-for="warning in validation.warnings" :key="warning">{{ warning }}</div>
+          <div v-for="warning in validation.warnings" :key="warning">
+            {{ warning }}
+          </div>
         </div>
         <ElDescriptions v-if="validation.valid" :column="2" size="small">
           <ElDescriptionsItem label="模型">
@@ -606,8 +687,14 @@ onMounted(async () => {
       </ElAlert>
 
       <template #footer>
-        <ElButton :disabled="saving" @click="drawerVisible = false">取消</ElButton>
-        <ElButton :loading="validating" :disabled="saving" @click="runValidation">
+        <ElButton :disabled="saving" @click="drawerVisible = false">
+          取消
+        </ElButton>
+        <ElButton
+          :loading="validating"
+          :disabled="saving"
+          @click="runValidation"
+        >
           配置体检
         </ElButton>
         <ElButton
@@ -642,8 +729,8 @@ onMounted(async () => {
 }
 
 .page-heading {
-  justify-content: space-between;
   gap: 16px;
+  justify-content: space-between;
 }
 
 .page-heading h2,
@@ -653,8 +740,8 @@ onMounted(async () => {
 
 .page-heading p {
   margin: 6px 0 0;
-  color: var(--el-text-color-secondary);
   font-size: 13px;
+  color: var(--el-text-color-secondary);
 }
 
 .heading-actions,
@@ -674,8 +761,8 @@ onMounted(async () => {
   gap: 6px;
   min-height: 108px;
   padding: 16px;
-  text-align: left;
   color: inherit;
+  text-align: left;
   background: var(--el-bg-color);
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 8px;
@@ -697,8 +784,8 @@ onMounted(async () => {
 
 .filter-result {
   margin-left: auto;
-  color: var(--el-text-color-secondary);
   font-size: 13px;
+  color: var(--el-text-color-secondary);
 }
 
 .agent-cell {
@@ -716,9 +803,9 @@ onMounted(async () => {
 
 .agent-code {
   margin-top: 3px;
-  color: var(--el-text-color-secondary);
   font-family: monospace;
   font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 .form-section {
@@ -730,9 +817,9 @@ onMounted(async () => {
 .field-tip {
   display: block;
   margin-top: 4px;
-  color: var(--el-text-color-secondary);
   font-size: 12px;
   line-height: 1.5;
+  color: var(--el-text-color-secondary);
 }
 
 .validation-warnings {
@@ -748,13 +835,13 @@ onMounted(async () => {
 
 @media (max-width: 700px) {
   .page-heading {
-    align-items: flex-start;
     flex-direction: column;
+    align-items: flex-start;
   }
 
   .filter-bar {
-    align-items: stretch;
     flex-direction: column;
+    align-items: stretch;
   }
 
   .filter-result {

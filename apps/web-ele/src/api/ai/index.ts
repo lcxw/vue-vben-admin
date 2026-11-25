@@ -70,6 +70,7 @@ export interface AiExpert {
   skillCodesJson?: string;
   mcpCodesJson?: string;
   kbCodesJson?: string;
+  sandboxType?: 'LOCAL' | 'REMOTE';
   maxIters?: number;
   enabled?: number;
   createTime?: string;
@@ -105,8 +106,29 @@ export interface AiConversation {
   id: string;
   userId?: string;
   expertCode: string;
+  workspaceId?: string;
   title?: string;
   updatedAt?: string;
+}
+
+export interface AiWorkspace {
+  id: string;
+  userId?: string;
+  name: string;
+  sandboxType: 'LOCAL' | 'REMOTE';
+  sandboxId?: string;
+  localRootPath?: string;
+  image?: string;
+  status?: string;
+  sandboxCreateMs?: number;
+  lastUsedAt?: string;
+}
+
+export interface AiWorkspaceFile {
+  path: string;
+  directory: boolean;
+  size: number;
+  modifiedAt?: string;
 }
 
 export interface AiMessage {
@@ -141,7 +163,7 @@ export interface AiAgentTrace {
 export interface AiAgentTraceSpan {
   id: string;
   traceId: string;
-  spanType: 'MODEL' | 'TOOL';
+  spanType: 'MODEL' | 'SANDBOX' | 'SANDBOX_CREATE' | 'TOOL';
   name?: string;
   externalId?: string;
   status: string;
@@ -293,6 +315,52 @@ export const aiKnowledgeApi = {
       query,
       topK,
     }),
+};
+
+export const aiWorkspaceApi = {
+  list: () => requestClient.post<AiWorkspace[]>('/ai/workspace/list', {}),
+  detail: (workspaceId: string) =>
+    requestClient.post<AiWorkspace>('/ai/workspace/detail', { workspaceId }),
+  files: (workspaceId: string, path = '') =>
+    requestClient.post<AiWorkspaceFile[]>('/ai/workspace/file/list', {
+      workspaceId,
+      path,
+    }),
+  readFile: (workspaceId: string, path: string) =>
+    requestClient.post<{ content: string }>('/ai/workspace/file/read', {
+      workspaceId,
+      path,
+    }),
+  writeFile: (workspaceId: string, path: string, content: string) =>
+    requestClient.post<void>('/ai/workspace/file/write', {
+      workspaceId,
+      path,
+      content,
+    }),
+  download: async (
+    workspaceId: string,
+    path: string,
+    token?: null | string,
+  ) => {
+    const response = await fetch('/api/ai/workspace/file/download', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ workspaceId, path }),
+    });
+    if (!response.ok) {
+      throw new Error(`下载失败（HTTP ${response.status}）`);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = path.split('/').pop() || 'download.bin';
+    anchor.click();
+    URL.revokeObjectURL(url);
+  },
 };
 
 export const aiConversationApi = {

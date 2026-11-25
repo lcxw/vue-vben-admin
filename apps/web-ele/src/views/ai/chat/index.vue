@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AiConversation, AiExpert } from '#/api/ai';
+import type { AiConversation, AiExpert, AiWorkspaceFile } from '#/api/ai';
 
 import { nextTick, onMounted, ref } from 'vue';
 
@@ -7,10 +7,22 @@ import { useAccessStore } from '@vben/stores';
 
 import { HttpAgent } from '@ag-ui/client';
 // 本应用没有全局 app.use(ElementPlus)，模板中使用的组件必须显式导入。
-import { ElButton, ElInput, ElMessage, ElOption, ElSelect } from 'element-plus';
+import {
+  ElButton,
+  ElInput,
+  ElMessage,
+  ElOption,
+  ElSelect,
+  ElTag,
+} from 'element-plus';
 import MarkdownRender from 'markstream-vue';
 
-import { AI_AGUI_RUN_URL, aiConversationApi, aiExpertApi } from '#/api/ai';
+import {
+  AI_AGUI_RUN_URL,
+  aiConversationApi,
+  aiExpertApi,
+  aiWorkspaceApi,
+} from '#/api/ai';
 
 import 'markstream-vue/index.css';
 
@@ -53,6 +65,9 @@ const experts = ref<AiExpert[]>([]);
 const conversations = ref<AiConversation[]>([]);
 const selectedExpert = ref('');
 const threadId = ref<string>(crypto.randomUUID());
+const workspaceId = ref<string>(threadId.value);
+const workspaceFiles = ref<AiWorkspaceFile[]>([]);
+const workspaceLoading = ref(false);
 const input = ref('');
 const sending = ref(false);
 const messages = ref<ChatMessage[]>([]);
@@ -63,9 +78,38 @@ let aborted = false;
 
 function newChat() {
   threadId.value = crypto.randomUUID();
+  workspaceId.value = threadId.value;
+  workspaceFiles.value = [];
   messages.value = [];
   toolLog.value = [];
   input.value = '';
+}
+
+async function loadWorkspaceFiles() {
+  if (!workspaceId.value) {
+    workspaceFiles.value = [];
+    return;
+  }
+  workspaceLoading.value = true;
+  try {
+    workspaceFiles.value = await aiWorkspaceApi.files(workspaceId.value);
+  } catch {
+    workspaceFiles.value = [];
+  } finally {
+    workspaceLoading.value = false;
+  }
+}
+
+async function downloadWorkspaceFile(file: AiWorkspaceFile) {
+  try {
+    await aiWorkspaceApi.download(
+      workspaceId.value,
+      file.path,
+      accessStore.accessToken,
+    );
+  } catch (error: any) {
+    ElMessage.error(error?.message || '下载失败');
+  }
 }
 
 async function loadMeta() {
@@ -74,11 +118,19 @@ async function loadMeta() {
     selectedExpert.value = experts.value[0]?.code || '';
   }
   conversations.value = await aiConversationApi.list();
+  const current = conversations.value.find(
+    (item) => item.id === threadId.value,
+  );
+  if (current?.workspaceId) {
+    workspaceId.value = current.workspaceId;
+  }
 }
 
 async function openConversation(conv: AiConversation) {
   threadId.value = conv.id;
+  workspaceId.value = conv.workspaceId || conv.id;
   selectedExpert.value = conv.expertCode;
+  await loadWorkspaceFiles();
   const rows = await aiConversationApi.messages(conv.id);
   messages.value = rows.map((row) => {
     let content = '';
@@ -137,6 +189,7 @@ async function send() {
     headers: {
       'Content-Type': 'application/json',
       'X-Agent-Id': selectedExpert.value,
+      ...(workspaceId.value ? { 'X-Workspace-Id': workspaceId.value } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   });
@@ -202,6 +255,7 @@ async function send() {
     }
     try {
       await loadMeta();
+      await loadWorkspaceFiles();
     } catch {
       ElMessage.warning('回复已生成，但会话列表刷新失败');
     }
@@ -222,7 +276,10 @@ function abort() {
   sending.value = false;
 }
 
-onMounted(loadMeta);
+onMounted(async () => {
+  await loadMeta();
+  await loadWorkspaceFiles();
+});
 </script>
 
 <template>
@@ -312,6 +369,49 @@ onMounted(loadMeta);
         </div>
       </div>
     </main>
+
+    <aside class="workspace-panel">
+      <div class="workspace-head">
+        <div>
+          <div class="workspace-title">工作区文件</div>
+          <ElTag size="small" effect="plain">
+            {{ workspaceId ? workspaceId.slice(0, 8) : '未绑定' }}
+          </ElTag>
+        </div>
+        <ElButton
+          size="small"
+          :loading="workspaceLoading"
+          @click="loadWorkspaceFiles"
+        >
+          刷新
+        </ElButton>
+      </div>
+      <div v-if="!workspaceFiles.length" class="workspace-empty">
+        {{ workspaceLoading ? '加载中…' : '当前工作区暂无文件' }}
+      </div>
+      <div v-else class="workspace-files">
+        <div
+          v-for="file in workspaceFiles"
+          :key="file.path"
+          class="workspace-file"
+        >
+          <span class="file-icon">{{ file.directory ? 'DIR' : 'FILE' }}</span>
+          <span class="file-name" :title="file.path">
+            {{ file.path.split('/').pop() || file.path }}
+          </span>
+          <ElButton
+            v-if="!file.directory"
+            link
+            type="primary"
+            size="small"
+            @click="downloadWorkspaceFile(file)"
+          >
+            下载
+          </ElButton>
+        </div>
+      </div>
+      <div class="workspace-tip">上传与 Agent 生成的文件都会出现在这里</div>
+    </aside>
   </div>
 </template>
 
@@ -435,5 +535,74 @@ onMounted(loadMeta);
   gap: 8px;
   justify-content: flex-end;
   margin-top: 8px;
+}
+
+.workspace-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 260px;
+  padding: 12px;
+  background: var(--el-bg-color-overlay);
+  border-radius: 8px;
+}
+
+.workspace-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.workspace-title {
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.workspace-empty,
+.workspace-tip {
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+}
+
+.workspace-files {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  overflow: auto;
+}
+
+.workspace-file {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+.workspace-file:hover {
+  background: var(--el-fill-color-light);
+}
+
+.file-icon {
+  padding: 1px 4px;
+  font-size: 9px;
+  color: var(--el-color-primary);
+  border: 1px solid var(--el-color-primary-light-5);
+  border-radius: 3px;
+}
+
+.file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-tip {
+  padding-top: 8px;
+  border-top: 1px solid var(--el-border-color-lighter);
 }
 </style>
