@@ -67,13 +67,15 @@ const detailTab = ref('input');
 const now = ref(Date.now());
 let refreshTimer: ReturnType<typeof setInterval> | undefined;
 
-const filterQuery = computed<Omit<AiTraceQuery, 'pageNum' | 'pageSize'>>(() => ({
-  keyword: filters.keyword.trim() || undefined,
-  status: filters.status || undefined,
-  expertCode: filters.expertCode || undefined,
-  startTime: filters.startTime || undefined,
-  endTime: filters.endTime || undefined,
-}));
+const filterQuery = computed<Omit<AiTraceQuery, 'pageNum' | 'pageSize'>>(
+  () => ({
+    keyword: filters.keyword.trim() || undefined,
+    status: filters.status || undefined,
+    expertCode: filters.expertCode || undefined,
+    startTime: filters.startTime || undefined,
+    endTime: filters.endTime || undefined,
+  }),
+);
 
 const visibleSpans = computed(() =>
   (detail.value?.spans ?? []).filter((span) => {
@@ -89,22 +91,29 @@ const visibleSpans = computed(() =>
 );
 
 const selectedSpan = computed(
-  () => detail.value?.spans.find((span) => span.id === selectedSpanId.value) ?? null,
+  () =>
+    detail.value?.spans.find((span) => span.id === selectedSpanId.value) ??
+    null,
 );
 
 const successRate = computed(() => {
   const completed = summary.value.total - summary.value.running;
-  return completed > 0 ? Math.round((summary.value.success / completed) * 100) : 0;
+  return completed > 0
+    ? Math.round((summary.value.success / completed) * 100)
+    : 0;
 });
 
 function statusType(value?: string) {
-  return value === 'SUCCESS'
-    ? 'success'
-    : value === 'RUNNING'
-      ? 'warning'
-      : value === 'CANCELLED'
-        ? 'info'
-        : 'danger';
+  if (value === 'SUCCESS') {
+    return 'success';
+  }
+  if (value === 'RUNNING') {
+    return 'warning';
+  }
+  if (value === 'CANCELLED') {
+    return 'info';
+  }
+  return 'danger';
 }
 
 function statusText(value?: string) {
@@ -114,7 +123,9 @@ function statusText(value?: string) {
       SUCCESS: '成功',
       ERROR: '失败',
       CANCELLED: '已取消',
-    }[value ?? ''] ?? value ?? '-'
+    }[value ?? ''] ??
+    value ??
+    '-'
   );
 }
 
@@ -123,7 +134,7 @@ function formatDate(value?: string) {
 }
 
 function formatDuration(value?: number) {
-  if (value == null) {
+  if (value === null || value === undefined) {
     return '-';
   }
   return value < 1000 ? `${value} ms` : `${(value / 1000).toFixed(2)} s`;
@@ -162,7 +173,11 @@ async function load(keepPage = false) {
   loading.value = true;
   try {
     const [page, stats] = await Promise.all([
-      aiTraceApi.list({ ...filterQuery.value, pageNum: pageNum.value, pageSize: pageSize.value }),
+      aiTraceApi.list({
+        ...filterQuery.value,
+        pageNum: pageNum.value,
+        pageSize: pageSize.value,
+      }),
       aiTraceApi.summary(filterQuery.value),
     ]);
     traces.value = page.list;
@@ -263,7 +278,9 @@ onMounted(() => {
   void aiExpertApi
     .list()
     .then((items) => (experts.value = items))
-    .catch(() => ElMessage.warning('Agent 筛选项加载失败，Trace 查询仍可正常使用'));
+    .catch(() =>
+      ElMessage.warning('Agent 筛选项加载失败，Trace 查询仍可正常使用'),
+    );
   refreshTimer = setInterval(() => {
     if (!document.hidden) {
       now.value = Date.now();
@@ -299,17 +316,35 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="stats-grid">
-      <button class="stat-card" @click="filters.status = ''; load()">
+      <button
+        class="stat-card"
+        @click="
+          filters.status = '';
+          load();
+        "
+      >
         <span>运行总数</span>
         <strong>{{ formatNumber(summary.total) }}</strong>
         <small>当前筛选范围</small>
       </button>
-      <button class="stat-card" @click="filters.status = 'SUCCESS'; load()">
+      <button
+        class="stat-card"
+        @click="
+          filters.status = 'SUCCESS';
+          load();
+        "
+      >
         <span>成功率</span>
         <strong class="success">{{ successRate }}%</strong>
         <small>成功 {{ summary.success }} · 失败 {{ summary.error }}</small>
       </button>
-      <button class="stat-card" @click="filters.status = 'RUNNING'; load()">
+      <button
+        class="stat-card"
+        @click="
+          filters.status = 'RUNNING';
+          load();
+        "
+      >
         <span>平均耗时</span>
         <strong>{{ formatDuration(summary.avgDurationMs) }}</strong>
         <small>运行中 {{ summary.running }} · 已取消 {{ summary.cancelled }}</small>
@@ -329,7 +364,12 @@ onBeforeUnmount(() => {
         placeholder="搜索 Run ID、会话、Agent 或错误"
         @keyup.enter="load()"
       />
-      <ElSelect v-model="filters.status" clearable style="width: 130px" placeholder="全部状态">
+      <ElSelect
+        v-model="filters.status"
+        clearable
+        style="width: 130px"
+        placeholder="全部状态"
+      >
         <ElOption label="运行中" value="RUNNING" />
         <ElOption label="成功" value="SUCCESS" />
         <ElOption label="失败" value="ERROR" />
@@ -366,7 +406,14 @@ onBeforeUnmount(() => {
       />
       <ElButton type="primary" @click="load()">查询</ElButton>
       <ElButton
-        @click="filters.keyword = ''; filters.status = ''; filters.expertCode = ''; filters.startTime = ''; filters.endTime = ''; load()"
+        @click="
+          filters.keyword = '';
+          filters.status = '';
+          filters.expertCode = '';
+          filters.startTime = '';
+          filters.endTime = '';
+          load();
+        "
       >
         重置
       </ElButton>
@@ -378,22 +425,34 @@ onBeforeUnmount(() => {
       </ElTableColumn>
       <ElTableColumn label="Agent" min-width="130">
         <template #default="{ row }">
-          <div class="agent-name">{{ row.agentName || row.expertCode || '-' }}</div>
+          <div class="agent-name">
+            {{ row.agentName || row.expertCode || '-' }}
+          </div>
           <div class="subtle">{{ row.expertCode }}</div>
         </template>
       </ElTableColumn>
-      <ElTableColumn prop="modelName" label="模型" min-width="140" show-overflow-tooltip />
+      <ElTableColumn
+        prop="modelName"
+        label="模型"
+        min-width="140"
+        show-overflow-tooltip
+      />
       <ElTableColumn label="状态" width="95">
         <template #default="{ row }">
-          <ElTag :type="statusType(row.status)">{{ statusText(row.status) }}</ElTag>
+          <ElTag :type="statusType(row.status)">
+            {{ statusText(row.status) }}
+          </ElTag>
         </template>
       </ElTableColumn>
       <ElTableColumn label="耗时" width="110">
-        <template #default="{ row }">{{ runningDuration(row as AiAgentTrace) }}</template>
+        <template #default="{ row }">
+          {{ runningDuration(row as AiAgentTrace) }}
+        </template>
       </ElTableColumn>
       <ElTableColumn label="Token" width="135">
         <template #default="{ row }">
-          <span>{{ formatNumber(row.inputTokens) }} / {{ formatNumber(row.outputTokens) }}</span>
+          <span>{{ formatNumber(row.inputTokens) }} /
+            {{ formatNumber(row.outputTokens) }}</span>
         </template>
       </ElTableColumn>
       <ElTableColumn label="Run / 会话" min-width="230">
@@ -411,7 +470,13 @@ onBeforeUnmount(() => {
       </ElTableColumn>
       <ElTableColumn label="操作" width="80" fixed="right">
         <template #default="{ row }">
-          <ElButton link type="primary" @click="openDetail(row as AiAgentTrace)">详情</ElButton>
+          <ElButton
+            link
+            type="primary"
+            @click="openDetail(row as AiAgentTrace)"
+          >
+            详情
+          </ElButton>
         </template>
       </ElTableColumn>
     </ElTable>
@@ -438,13 +503,21 @@ onBeforeUnmount(() => {
       <template v-if="detail">
         <div class="detail-heading">
           <div class="detail-title">
-            <h3>{{ detail.trace.agentName || detail.trace.expertCode || 'Agent Run' }}</h3>
-            <ElTag :type="statusType(detail.trace.status)">{{ statusText(detail.trace.status) }}</ElTag>
+            <h3>
+              {{
+                detail.trace.agentName || detail.trace.expertCode || 'Agent Run'
+              }}
+            </h3>
+            <ElTag :type="statusType(detail.trace.status)">
+              {{ statusText(detail.trace.status) }}
+            </ElTag>
           </div>
           <div class="heading-actions">
             <ElButton @click="copyRunId">复制 Run ID</ElButton>
             <ElButton @click="exportDetail('markdown')">导出 Markdown</ElButton>
-            <ElButton type="primary" @click="exportDetail('json')">导出 JSON</ElButton>
+            <ElButton type="primary" @click="exportDetail('json')">
+              导出 JSON
+            </ElButton>
           </div>
         </div>
 
@@ -455,12 +528,19 @@ onBeforeUnmount(() => {
           <ElDescriptionsItem label="会话 ID" :span="2">
             <span class="mono">{{ detail.trace.conversationId }}</span>
           </ElDescriptionsItem>
-          <ElDescriptionsItem label="模型">{{ detail.trace.modelName || '-' }}</ElDescriptionsItem>
-          <ElDescriptionsItem label="开始时间">{{ formatDate(detail.trace.startedAt) }}</ElDescriptionsItem>
-          <ElDescriptionsItem label="耗时">{{ runningDuration(detail.trace) }}</ElDescriptionsItem>
+          <ElDescriptionsItem label="模型">
+            {{ detail.trace.modelName || '-' }}
+          </ElDescriptionsItem>
+          <ElDescriptionsItem label="开始时间">
+            {{ formatDate(detail.trace.startedAt) }}
+          </ElDescriptionsItem>
+          <ElDescriptionsItem label="耗时">
+            {{ runningDuration(detail.trace) }}
+          </ElDescriptionsItem>
           <ElDescriptionsItem label="Token">
             {{ formatNumber(detail.trace.totalTokens) }}
-            <span class="subtle">（入 {{ detail.trace.inputTokens ?? 0 }} / 出 {{ detail.trace.outputTokens ?? 0 }}）</span>
+            <span class="subtle">（入 {{ detail.trace.inputTokens ?? 0 }} / 出
+              {{ detail.trace.outputTokens ?? 0 }}）</span>
           </ElDescriptionsItem>
         </ElDescriptions>
 
@@ -487,7 +567,13 @@ onBeforeUnmount(() => {
                 刷新
               </ElButton>
             </div>
-            <ElSelect v-model="spanType" clearable size="small" placeholder="全部类型" style="width: 100%">
+            <ElSelect
+              v-model="spanType"
+              clearable
+              size="small"
+              placeholder="全部类型"
+              style="width: 100%"
+            >
               <ElOption label="模型调用 MODEL" value="MODEL" />
               <ElOption label="工具调用 TOOL" value="TOOL" />
             </ElSelect>
@@ -499,7 +585,11 @@ onBeforeUnmount(() => {
               style="margin-top: 8px"
             />
             <div v-loading="detailLoading" class="span-list">
-              <ElEmpty v-if="!visibleSpans.length" description="没有匹配的调用" :image-size="70" />
+              <ElEmpty
+                v-if="!visibleSpans.length"
+                description="没有匹配的调用"
+                :image-size="70"
+              />
               <ElTimeline v-else>
                 <ElTimelineItem
                   v-for="(span, index) in visibleSpans"
@@ -514,14 +604,23 @@ onBeforeUnmount(() => {
                     @click="selectSpan(span)"
                   >
                     <div class="span-item-title">
-                      <ElTag size="small" :type="span.spanType === 'MODEL' ? 'primary' : 'warning'">
+                      <ElTag
+                        size="small"
+                        :type="
+                          span.spanType === 'MODEL' ? 'primary' : 'warning'
+                        "
+                      >
                         {{ index + 1 }} · {{ span.spanType }}
                       </ElTag>
                       <span>{{ formatDuration(span.durationMs) }}</span>
                     </div>
                     <strong>{{ span.name || '-' }}</strong>
-                    <div class="mono subtle">{{ span.externalId || span.id }}</div>
-                    <div v-if="span.errorMessage" class="error-text">{{ span.errorMessage }}</div>
+                    <div class="mono subtle">
+                      {{ span.externalId || span.id }}
+                    </div>
+                    <div v-if="span.errorMessage" class="error-text">
+                      {{ span.errorMessage }}
+                    </div>
                   </button>
                 </ElTimelineItem>
               </ElTimeline>
@@ -531,28 +630,64 @@ onBeforeUnmount(() => {
           <section class="payload-panel">
             <div class="payload-heading">
               <div>
-                <h4>{{ selectedSpan ? `${selectedSpan.spanType} · ${selectedSpan.name || '-'}` : '运行输入 / 输出' }}</h4>
-                <span v-if="selectedSpan" class="subtle mono">{{ selectedSpan.externalId }}</span>
+                <h4>
+                  {{
+                    selectedSpan
+                      ? `${selectedSpan.spanType} · ${selectedSpan.name || '-'}`
+                      : '运行输入 / 输出'
+                  }}
+                </h4>
+                <span v-if="selectedSpan" class="subtle mono">{{
+                  selectedSpan.externalId
+                }}</span>
               </div>
-              <ElButton v-if="selectedSpan" size="small" @click="selectedSpanId = ''">查看运行总览</ElButton>
+              <ElButton
+                v-if="selectedSpan"
+                size="small"
+                @click="selectedSpanId = ''"
+              >
+                查看运行总览
+              </ElButton>
             </div>
             <ElTabs v-model="detailTab">
               <ElTabPane label="输入" name="input">
-                <pre>{{ prettyJson(selectedSpan ? selectedSpan.inputJson : detail.trace.inputJson) || '无输入数据' }}</pre>
+                <pre>{{
+                  prettyJson(
+                    selectedSpan
+                      ? selectedSpan.inputJson
+                      : detail.trace.inputJson,
+                  ) || '无输入数据'
+                }}</pre>
               </ElTabPane>
               <ElTabPane label="输出" name="output">
-                <pre>{{ prettyJson(selectedSpan ? selectedSpan.outputJson : detail.trace.outputJson) || '无输出数据' }}</pre>
+                <pre>{{
+                  prettyJson(
+                    selectedSpan
+                      ? selectedSpan.outputJson
+                      : detail.trace.outputJson,
+                  ) || '无输出数据'
+                }}</pre>
               </ElTabPane>
               <ElTabPane v-if="selectedSpan" label="元数据" name="metadata">
                 <ElDescriptions :column="2" border size="small">
-                  <ElDescriptionsItem label="类型">{{ selectedSpan.spanType }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="状态">{{ statusText(selectedSpan.status) }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="调用 ID">{{ selectedSpan.externalId || '-' }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="耗时">{{ formatDuration(selectedSpan.durationMs) }}</ElDescriptionsItem>
+                  <ElDescriptionsItem label="类型">
+                    {{ selectedSpan.spanType }}
+                  </ElDescriptionsItem>
+                  <ElDescriptionsItem label="状态">
+                    {{ statusText(selectedSpan.status) }}
+                  </ElDescriptionsItem>
+                  <ElDescriptionsItem label="调用 ID">
+                    {{ selectedSpan.externalId || '-' }}
+                  </ElDescriptionsItem>
+                  <ElDescriptionsItem label="耗时">
+                    {{ formatDuration(selectedSpan.durationMs) }}
+                  </ElDescriptionsItem>
                   <ElDescriptionsItem label="Token" :span="2">
                     {{ prettyJson(selectedSpan.tokenUsageJson) || '-' }}
                   </ElDescriptionsItem>
-                  <ElDescriptionsItem label="错误" :span="2">{{ selectedSpan.errorMessage || '-' }}</ElDescriptionsItem>
+                  <ElDescriptionsItem label="错误" :span="2">
+                    {{ selectedSpan.errorMessage || '-' }}
+                  </ElDescriptionsItem>
                 </ElDescriptions>
               </ElTabPane>
             </ElTabs>
@@ -602,8 +737,8 @@ onBeforeUnmount(() => {
 
 .page-heading p {
   margin: 6px 0 0;
-  color: var(--el-text-color-secondary);
   font-size: 13px;
+  color: var(--el-text-color-secondary);
 }
 
 .heading-actions,
@@ -613,10 +748,10 @@ onBeforeUnmount(() => {
 
 .auto-refresh {
   display: flex;
-  align-items: center;
   gap: 7px;
-  color: var(--el-text-color-secondary);
+  align-items: center;
   font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 .stats-grid {
@@ -631,8 +766,8 @@ onBeforeUnmount(() => {
   gap: 6px;
   min-height: 108px;
   padding: 16px;
-  text-align: left;
   color: inherit;
+  text-align: left;
   background: var(--el-bg-color);
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 8px;
@@ -666,8 +801,8 @@ onBeforeUnmount(() => {
 
 .subtle,
 .pagination-bar {
-  color: var(--el-text-color-secondary);
   font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 .mono {
@@ -681,8 +816,8 @@ onBeforeUnmount(() => {
 }
 
 .pagination-bar {
-  align-self: flex-end;
   gap: 14px;
+  align-self: flex-end;
 }
 
 .run-summary {
@@ -726,12 +861,12 @@ onBeforeUnmount(() => {
   gap: 6px;
   width: 100%;
   padding: 10px;
-  text-align: left;
   color: inherit;
+  text-align: left;
+  cursor: pointer;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 6px;
-  cursor: pointer;
 }
 
 .span-item:hover,
@@ -741,10 +876,10 @@ onBeforeUnmount(() => {
 }
 
 .span-item-title {
-  justify-content: space-between;
   gap: 8px;
-  color: var(--el-text-color-secondary);
+  justify-content: space-between;
   font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 .payload-panel pre {
@@ -753,12 +888,12 @@ onBeforeUnmount(() => {
   padding: 14px;
   margin: 0;
   overflow: auto;
-  white-space: pre-wrap;
+  font-size: 12px;
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
   background: var(--el-fill-color-light);
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 6px;
-  font-size: 12px;
 }
 
 @media (max-width: 1100px) {
@@ -770,8 +905,8 @@ onBeforeUnmount(() => {
 @media (max-width: 850px) {
   .page-heading,
   .detail-heading {
-    align-items: flex-start;
     flex-direction: column;
+    align-items: flex-start;
   }
 
   .detail-layout {

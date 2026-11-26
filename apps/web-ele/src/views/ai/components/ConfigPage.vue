@@ -262,7 +262,7 @@ onMounted(load);
   margin: 0;
   overflow: auto;
   font-size: 12px;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 

@@ -451,13 +451,8 @@ catalogs:
       specifier: ^7.2.0
       version: 7.2.0
     vite:
-<<<<<<< HEAD
-      specifier: ^8.3.0
-      version: 8.2.2
-=======
       specifier: ^8.3.8
       version: 8.3.8
->>>>>>> 3891d74ec11ec1f9e6809507e82295494e011232
     vite-plugin-compression:
       specifier: ^0.5.1
       version: 0.5.1
@@ -717,11 +712,7 @@ importers:
         version: 3.5.41(typescript@6.0.3)
       vue-router:
         specifier: 'catalog:'
-<<<<<<< HEAD
-        version: 5.2.0(@vue/compiler-sfc@3.5.41)(esbuild@0.28.2)(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.41(typescript@6.0.3)))(rolldown@1.2.14)(rollup@4.62.5)(vite@8.3.0(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.103.1)(sass@1.103.1)(terser@5.50.0)(yaml@2.9.1))(vue@3.5.41(typescript@6.0.3))
-=======
         version: 5.2.0(@vue/compiler-sfc@3.5.41)(esbuild@0.28.2)(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.41(typescript@6.0.3)))(rolldown@1.2.9)(rollup@4.62.5)(vite@8.3.8(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.103.1)(sass@1.103.1)(terser@5.50.0)(yaml@2.9.1))(vue@3.5.41(typescript@6.0.3))
->>>>>>> 3891d74ec11ec1f9e6809507e82295494e011232
 
   apps/web-antdv-next:
     dependencies:
@@ -794,12 +785,9 @@ importers:
       '@ag-ui/client':
         specifier: ^1.0.5
         version: 1.0.5(zod@4.4.3)
-<<<<<<< HEAD
-=======
       '@vben-core/typings':
         specifier: workspace:*
         version: link:../../packages/@core/base/typings
->>>>>>> 3891d74ec11ec1f9e6809507e82295494e011232
       '@vben/access':
         specifier: workspace:*
         version: link:../../packages/effects/access
@@ -865,11 +853,7 @@ importers:
         version: 3.5.41(typescript@6.0.3)
       vue-router:
         specifier: 'catalog:'
-<<<<<<< HEAD
-        version: 5.2.0(@vue/compiler-sfc@3.5.41)(esbuild@0.28.2)(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.41(typescript@6.0.3)))(rolldown@1.2.14)(rollup@4.62.5)(vite@8.3.0(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.103.1)(sass@1.103.1)(terser@5.50.0)(yaml@2.9.1))(vue@3.5.41(typescript@6.0.3))
-=======
         version: 5.2.0(@vue/compiler-sfc@3.5.41)(esbuild@0.28.2)(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.41(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.5)(vite@8.3.8(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.103.1)(sass@1.103.1)(terser@5.50.0)(yaml@2.9.1))(vue@3.5.41(typescript@6.0.3))
->>>>>>> 3891d74ec11ec1f9e6809507e82295494e011232
       zod:
         specifier: 'catalog:'
         version: 4.4.3
@@ -9076,13 +9060,8 @@ packages:
   markdown-it-task-checkbox@1.0.6:
     resolution: {integrity: sha512-7pxkHuvqTOu3iwVGmDPeYjQg+AIS9VQxzyLP9JCg9lBjgPAJXGEkChK6A2iFuj3tS0GV3HG2u5AMNhcQqwxpJw==}
 
-<<<<<<< HEAD
   markdown-it-ts@1.1.7:
     resolution: {integrity: sha512-xCh0HghpLcsgNStX5GTkIMNZtXhfTXdhU/AZeMYVpqcW4aZlAw2RGi5KY7WaMtOyKaMSao4Kub4vLvgCNWCP1A==}
-=======
-  markdown-it-ts@1.1.8:
-    resolution: {integrity: sha512-8QVim/mINOfv8eE6OT97aM7WYyo+G2P/hAr0tujwEGnAYztG6cJQ0X5B6PqtnjsXjRqDxtQWjWdvrn1DPbgGAw==}
->>>>>>> 3891d74ec11ec1f9e6809507e82295494e011232
     engines: {node: '>=20.19'}
 
   markstream-core@2.0.25:
@@ -15695,7 +15674,7 @@ snapshots:
     dependencies:
       '@volar/language-core': 2.4.28
       '@vue/compiler-dom': 3.5.43
-      '@vue/shared': 3.5.43
+      '@vue/shared': 3.5.44
       alien-signals: 3.2.1
       muggle-string: 0.4.1
       path-browserify: 1.0.1
@@ -18667,11 +18646,7 @@ snapshots:
 
   markdown-it-task-checkbox@1.0.6: {}
 
-<<<<<<< HEAD
   markdown-it-ts@1.1.7:
-=======
-  markdown-it-ts@1.1.8:
->>>>>>> 3891d74ec11ec1f9e6809507e82295494e011232
     dependencies:
       entities: 8.1.0
       linkify-it: 6.1.0
@@ -20239,11 +20214,7 @@ snapshots:
       markdown-it-mark: 4.0.0
       markdown-it-sup: 2.0.0
       markdown-it-task-checkbox: 1.0.6
-<<<<<<< HEAD
       markdown-it-ts: 1.1.7
-=======
-      markdown-it-ts: 1.1.8
->>>>>>> 3891d74ec11ec1f9e6809507e82295494e011232
 
   stream-parser@0.3.1(supports-color@10.2.2):
     dependencies:
@@ -21023,37 +20994,16 @@ snapshots:
       rollup: 4.62.5
       vite: 8.3.8(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.103.1)(sass@1.103.1)(terser@5.50.0)(yaml@2.9.1)
 
-<<<<<<< HEAD
-  unplugin@3.3.0(esbuild@0.28.2)(rolldown@1.2.5)(rollup@4.62.5)(vite@8.2.2(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.103.1)(sass@1.103.1)(terser@5.50.0)(yaml@2.9.0)):
-=======
   unplugin@3.3.0(esbuild@0.28.2)(rolldown@1.2.9)(rollup@4.62.5)(vite@8.3.8(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.103.1)(sass@1.103.1)(terser@5.50.0)(yaml@2.9.1)):
->>>>>>> 3891d74ec11ec1f9e6809507e82295494e011232
     dependencies:
       '@jridgewell/remapping': 2.3.5
       picomatch: 4.0.7
       webpack-virtual-modules: 0.6.2
     optionalDependencies:
       esbuild: 0.28.2
-<<<<<<< HEAD
-      rolldown: 1.2.5
-      rollup: 4.62.5
-      vite: 8.2.2(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.103.1)(sass@1.103.1)(terser@5.50.0)(yaml@2.9.0)
-
-  unplugin@3.3.0(esbuild@0.28.2)(rolldown@1.2.5)(rollup@4.62.5)(vite@8.3.0(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.103.1)(sass@1.103.1)(terser@5.50.0)(yaml@2.9.1)):
-    dependencies:
-      '@jridgewell/remapping': 2.3.5
-      picomatch: 4.0.7
-      webpack-virtual-modules: 0.6.2
-    optionalDependencies:
-      esbuild: 0.28.2
-      rolldown: 1.2.5
-      rollup: 4.62.5
-      vite: 8.3.0(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.103.1)(sass@1.103.1)(terser@5.50.0)(yaml@2.9.1)
-=======
       rolldown: 1.2.9
       rollup: 4.62.5
       vite: 8.3.8(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.103.1)(sass@1.103.1)(terser@5.50.0)(yaml@2.9.1)
->>>>>>> 3891d74ec11ec1f9e6809507e82295494e011232
 
   unstorage@1.17.5(db0@0.3.4)(ioredis@5.11.1(supports-color@10.2.2)):
     dependencies:
@@ -21249,13 +21199,8 @@ snapshots:
     dependencies:
       lightningcss: 1.33.0
       picomatch: 4.0.7
-<<<<<<< HEAD
-      postcss: 8.5.28
-      rolldown: 1.2.14
-=======
       postcss: 8.5.32
       rolldown: 1.2.19
->>>>>>> 3891d74ec11ec1f9e6809507e82295494e011232
       tinyglobby: 0.2.17
     optionalDependencies:
       '@types/node': 26.6.5
@@ -21427,8 +21372,6 @@ snapshots:
       - unloader
       - webpack
 
-<<<<<<< HEAD
-=======
   vue-router@5.2.0(@vue/compiler-sfc@3.5.41)(esbuild@0.28.2)(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.41(typescript@6.0.3)))(rolldown@1.2.9)(rollup@4.62.5)(vite@8.3.8(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.103.1)(sass@1.103.1)(terser@5.50.0)(yaml@2.9.1))(vue@3.5.41(typescript@6.0.3)):
     dependencies:
       '@babel/generator': 8.0.0
@@ -21464,7 +21407,6 @@ snapshots:
       - unloader
       - webpack
 
->>>>>>> 3891d74ec11ec1f9e6809507e82295494e011232
   vue-tippy@6.7.1(vue@3.5.41(typescript@6.0.3)):
     dependencies:
       tippy.js: 6.3.7

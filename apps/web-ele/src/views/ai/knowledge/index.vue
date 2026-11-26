@@ -97,11 +97,9 @@ function openEdit(row: any) {
 async function save() {
   try {
     const payload = form.value as AiKnowledgeBase;
-    if (editing.value) {
-      await aiKnowledgeApi.update(payload);
-    } else {
-      await aiKnowledgeApi.add(payload);
-    }
+    await (editing.value
+      ? aiKnowledgeApi.update(payload)
+      : aiKnowledgeApi.add(payload));
     ElMessage.success('保存成功');
     dialogVisible.value = false;
     await loadBases();
@@ -165,7 +163,7 @@ async function removeDoc(row: any) {
   await ElMessageBox.confirm(`确认删除文档「${row.fileName}」？`, '提示', {
     type: 'warning',
   });
-  await aiKnowledgeApi.removeDoc(row.id!);
+  await aiKnowledgeApi.removeDoc(row.id);
   await loadDocs();
 }
 
@@ -191,8 +189,8 @@ onMounted(async () => {
     <div class="kb-header">
       <span class="title">知识库管理</span>
       <ElButton type="primary" size="small" @click="openAdd">
-新增知识库
-</ElButton>
+        新增知识库
+      </ElButton>
       <ElButton size="small" @click="loadBases">刷新</ElButton>
     </div>
 
@@ -218,18 +216,23 @@ onMounted(async () => {
       </ElTableColumn>
       <ElTableColumn label="操作" width="240" fixed="right">
         <template #default="{ row }">
-          <ElButton link type="primary" size="small" @click.stop="openEdit(row)">
-编辑
-</ElButton>
+          <ElButton
+            link
+            type="primary"
+            size="small"
+            @click.stop="openEdit(row)"
+          >
+            编辑
+          </ElButton>
           <ElButton link size="small" @click.stop="toggle(row)">
             {{ row.enabled === 0 ? '启用' : '停用' }}
           </ElButton>
           <ElButton link type="warning" size="small" @click.stop="reindex(row)">
-重建索引
-</ElButton>
+            重建索引
+          </ElButton>
           <ElButton link type="danger" size="small" @click.stop="remove(row)">
-删除
-</ElButton>
+            删除
+          </ElButton>
         </template>
       </ElTableColumn>
     </ElTable>
@@ -262,8 +265,8 @@ onMounted(async () => {
         <ElTableColumn label="操作" width="90" fixed="right">
           <template #default="{ row }">
             <ElButton link type="danger" size="small" @click="removeDoc(row)">
-删除
-</ElButton>
+              删除
+            </ElButton>
           </template>
         </ElTableColumn>
       </ElTable>
@@ -275,8 +278,8 @@ onMounted(async () => {
           @keyup.enter="search"
         />
         <ElButton type="primary" size="small" @click="search">
-检索测试
-</ElButton>
+          检索测试
+        </ElButton>
       </div>
       <div v-for="hit in hits" :key="hit.docId + hit.content" class="kb-hit">
         <div class="kb-hit-title">
@@ -295,8 +298,8 @@ onMounted(async () => {
         <ElFormItem label="编码"><ElInput v-model="form.code" /></ElFormItem>
         <ElFormItem label="名称"><ElInput v-model="form.name" /></ElFormItem>
         <ElFormItem label="说明">
-<ElInput v-model="form.description" />
-</ElFormItem>
+          <ElInput v-model="form.description" />
+        </ElFormItem>
         <ElFormItem label="Embedding 模型">
           <ElSelect v-model="form.embeddingModelCode" style="width: 100%">
             <ElOption
@@ -308,17 +311,17 @@ onMounted(async () => {
           </ElSelect>
         </ElFormItem>
         <ElFormItem label="分块大小">
-<ElInput v-model.number="form.chunkSize" />
-</ElFormItem>
+          <ElInput v-model.number="form.chunkSize" />
+        </ElFormItem>
         <ElFormItem label="重叠字符">
-<ElInput v-model.number="form.chunkOverlap" />
-</ElFormItem>
+          <ElInput v-model.number="form.chunkOverlap" />
+        </ElFormItem>
         <ElFormItem label="检索条数">
-<ElInput v-model.number="form.topK" />
-</ElFormItem>
+          <ElInput v-model.number="form.topK" />
+        </ElFormItem>
         <ElFormItem label="距离阈值">
-<ElInput v-model.number="form.scoreThreshold" />
-</ElFormItem>
+          <ElInput v-model.number="form.scoreThreshold" />
+        </ElFormItem>
       </ElForm>
       <template #footer>
         <ElButton @click="dialogVisible = false">取消</ElButton>

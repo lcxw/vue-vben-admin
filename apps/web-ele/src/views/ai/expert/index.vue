@@ -146,7 +146,12 @@ function withMissing(
   options: ExpertFormOption[],
   current: null | string | string[],
 ): ExpertFormOption[] {
-  const values = Array.isArray(current) ? current : current ? [current] : [];
+  let values: string[] = [];
+  if (Array.isArray(current)) {
+    values = current;
+  } else if (current) {
+    values = [current];
+  }
   const missing = values.filter(
     (value) => !options.some((item) => item.value === value),
   );
@@ -276,11 +281,9 @@ async function save() {
   }
   saving.value = true;
   try {
-    if (editing.value) {
-      await aiExpertApi.update(payload());
-    } else {
-      await aiExpertApi.add(payload());
-    }
+    await (editing.value
+      ? aiExpertApi.update(payload())
+      : aiExpertApi.add(payload()));
     ElMessage.success('专家配置已保存并生效');
     drawerVisible.value = false;
     await load();
@@ -290,8 +293,12 @@ async function save() {
 }
 
 async function toggle(row: AiExpert) {
+  if (!row.id) {
+    ElMessage.error('专家 ID 不能为空');
+    return;
+  }
   try {
-    await aiExpertApi.toggle(row.id!, row.enabled === 0 ? 1 : 0);
+    await aiExpertApi.toggle(row.id, row.enabled === 0 ? 1 : 0);
     ElMessage.success(row.enabled === 0 ? '专家已启用' : '专家已停用');
     await load();
   } catch (error: any) {
@@ -300,6 +307,10 @@ async function toggle(row: AiExpert) {
 }
 
 async function copy(row: AiExpert) {
+  if (!row.id) {
+    ElMessage.error('专家 ID 不能为空');
+    return;
+  }
   await ElMessageBox.confirm(
     `复制「${row.name}」为停用状态的专家？`,
     '复制专家',
@@ -307,18 +318,22 @@ async function copy(row: AiExpert) {
       type: 'info',
     },
   );
-  await aiExpertApi.copy(row.id!);
+  await aiExpertApi.copy(row.id);
   ElMessage.success('已创建停用副本');
   await load();
 }
 
 async function remove(row: AiExpert) {
+  if (!row.id) {
+    ElMessage.error('专家 ID 不能为空');
+    return;
+  }
   await ElMessageBox.confirm(
     `确认删除「${row.name}」？已有会话记录的专家不能删除。`,
     '删除专家',
     { type: 'warning' },
   );
-  await aiExpertApi.remove(row.id!);
+  await aiExpertApi.remove(row.id);
   ElMessage.success('专家已删除');
   await load();
 }

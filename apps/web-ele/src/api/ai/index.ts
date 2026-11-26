@@ -131,8 +131,19 @@ export interface AiWorkspaceFile {
   modifiedAt?: string;
 }
 
+export interface AiWorkspaceAttachment {
+  id: string;
+  conversationId: string;
+  fileName: string;
+  contentType: string;
+  fileSize: number;
+  parsed: boolean;
+  createTime?: string;
+}
+
 export interface AiMessage {
   id: string;
+  clientMessageId?: string;
   conversationId: string;
   role: string;
   runId?: string;
@@ -216,9 +227,12 @@ function crud<T>(base: string) {
     list: () => requestClient.post<T[]>(`${base}/list`, {}),
     add: (entity: T) => requestClient.post<T>(`${base}/add`, entity),
     update: (entity: T) => requestClient.post<T>(`${base}/update`, entity),
-    remove: (id: string) => requestClient.post<void>(`${base}/delete`, { id }),
-    toggle: (id: string, enabled: number) =>
-      requestClient.post<void>(`${base}/toggle`, { id, enabled }),
+    remove: async (id: string) => {
+      await requestClient.post<unknown>(`${base}/delete`, { id });
+    },
+    toggle: async (id: string, enabled: number) => {
+      await requestClient.post<unknown>(`${base}/toggle`, { id, enabled });
+    },
   };
 }
 
@@ -234,7 +248,9 @@ export const aiMcpApi = {
   ...crud<AiMcpServer>('/ai/mcp'),
   tools: (code: string) =>
     requestClient.post<McpToolInfo[]>('/ai/mcp/tools', { code }),
-  reload: () => requestClient.post<void>('/ai/mcp/reload', {}),
+  reload: async () => {
+    await requestClient.post<unknown>('/ai/mcp/reload', {});
+  },
 };
 
 export const aiSkillApi = crud<AiSkill>('/ai/skill');
@@ -294,9 +310,12 @@ export const aiKnowledgeApi = {
     requestClient.post<AiKnowledgeBase>('/ai/kb/add', entity),
   update: (entity: AiKnowledgeBase) =>
     requestClient.post<AiKnowledgeBase>('/ai/kb/update', entity),
-  remove: (code: string) => requestClient.post<void>('/ai/kb/delete', { code }),
-  toggle: (code: string, enabled: number) =>
-    requestClient.post<void>('/ai/kb/toggle', { code, enabled }),
+  remove: async (code: string) => {
+    await requestClient.post<unknown>('/ai/kb/delete', { code });
+  },
+  toggle: async (code: string, enabled: number) => {
+    await requestClient.post<unknown>('/ai/kb/toggle', { code, enabled });
+  },
   docs: (kbCode: string) =>
     requestClient.post<AiKnowledgeDoc[]>('/ai/kb/doc/list', { kbCode }),
   upload: (kbCode: string, file: File) => {
@@ -305,8 +324,9 @@ export const aiKnowledgeApi = {
     form.append('file', file);
     return requestClient.post<AiKnowledgeDoc>('/ai/kb/doc/upload', form);
   },
-  removeDoc: (id: string) =>
-    requestClient.post<void>('/ai/kb/doc/delete', { id }),
+  removeDoc: async (id: string) => {
+    await requestClient.post<unknown>('/ai/kb/doc/delete', { id });
+  },
   reindex: (code: string) =>
     requestClient.post<number>('/ai/kb/reindex', { code }),
   search: (kbCode: string, query: string, topK?: number) =>
@@ -331,12 +351,13 @@ export const aiWorkspaceApi = {
       workspaceId,
       path,
     }),
-  writeFile: (workspaceId: string, path: string, content: string) =>
-    requestClient.post<void>('/ai/workspace/file/write', {
+  writeFile: async (workspaceId: string, path: string, content: string) => {
+    await requestClient.post<unknown>('/ai/workspace/file/write', {
       workspaceId,
       path,
       content,
-    }),
+    });
+  },
   download: async (
     workspaceId: string,
     path: string,
@@ -369,12 +390,29 @@ export const aiConversationApi = {
     requestClient.post<AiMessage[]>('/ai/conversation/messages', {
       conversationId,
     }),
-  remove: (id: string) =>
-    requestClient.post<void>('/ai/conversation/delete', { id }),
+  sync: async (payload: {
+    conversationId: string;
+    expertCode: string;
+    title?: string;
+    messages: { role: string; content: string }[];
+  }) => {
+    await requestClient.post<unknown>('/ai/conversation/sync', payload);
+  },
+  remove: async (id: string) => {
+    await requestClient.post<unknown>('/ai/conversation/delete', { id });
+  },
   state: (conversationId: string) =>
     requestClient.post<AiAgentState>('/ai/conversation/state', {
       conversationId,
     }),
+};
+
+export const aiWorkspaceAttachmentApi = {
+  upload: (conversationId: string, expertCode: string, file: File) =>
+    requestClient.upload<AiWorkspaceAttachment>(
+      '/ai/workspace/attachment/upload',
+      { conversationId, expertCode, file },
+    ),
 };
 
 export const aiTraceApi = {
